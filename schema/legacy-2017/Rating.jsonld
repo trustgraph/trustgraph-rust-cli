@@ -3,8 +3,8 @@
     "id": "@id",
     "type": "@type",
 
-    "schema": "http://schema.org/",
-    "dc": "http://purl.org/dc/terms/",
+    "schema": "https://schema.org/",
+    "dc": "https://purl.org/dc/terms/",
 
     "author": {"@id": "dc:creator", "@type": "@id"},
 

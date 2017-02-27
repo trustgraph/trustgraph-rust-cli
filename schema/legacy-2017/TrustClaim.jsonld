@@ -6,7 +6,7 @@
     "cred": "https://w3id.org/credentials#",
     "sec": "https://w3id.org/security#",
     "trust": "https://schema.trust.exchange/#",
-    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "xsd": "https://www.w3.org/2001/XMLSchema#",
 
     "claim": {"@id": "trust:GeneralRating", "@type": "@id"},
     "issued": {"@id": "cred:issued", "@type": "xsd:dateTime"},

@@ -3,7 +3,7 @@
     "id": "@id",
     "type": "@type",
 
-    "schema": "http://schema.org/",
+    "schema": "https://schema.org/",
 
     "rating": {"@id": "schema:Rating", "@type": "@id"},
     "target": {"@id": "schema:Thing", "@type": "@id"}

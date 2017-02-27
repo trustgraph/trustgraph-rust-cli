@@ -5,7 +5,7 @@
 
     "cred": "https://w3id.org/credentials#",
     "sec": "https://w3id.org/security#",
-    "trust": "http://schema.trust.exchange/#",
+    "trust": "https://schema.trust.exchange/#",
     "xsd": "http://www.w3.org/2001/XMLSchema#",
 
     "claim": {"@id": "trust:GeneralRating", "@type": "@id"},

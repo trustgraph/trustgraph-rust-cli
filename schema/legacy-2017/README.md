@@ -1,1 +1,1 @@
-JSON-LD Schemas for [Trust Exchange](http://trust.exchange).
+JSON-LD Schemas for [Trust Graph](http://trustgraph.io).

@@ -1,4 +1,5 @@
-use clap::error::ErrorKind;
+use serde_json::json;
+// use clap::error::ErrorKind;
 use clap::Parser;
 
 mod cli;
@@ -26,48 +27,77 @@ use cli::{Cli, Commands};
 fn main() {
   let args = Cli::parse();
 
-  match args.command {
-      Commands::A { a } => {
-          println!("Cloning {}", a);
+  match &args.command {
+      Some(Commands::Claim {
+        creator,
+        target,
+        tags,
+        description,
+        // extra,
+        value,
+        algorithm, 
+        private_key,
+        target_format,
+        write,
+       }) => {
+
+        let john = json!({
+
+          "@context": "https://raw.githubusercontent.com/trustgraph/trustgraph-schema/gh-pages/TrustClaim.jsonld",
+          "type": target_format,
+          "issuer": creator,
+          "issued": "2017-03-04T02:05:07-08:00",
+          "claim": {
+              "@context": "https://schema.org/",
+              "type": "Review",
+              "itemReviewed": target,
+              "author": creator,
+              "keywords": tags,
+              "reviewRating": {
+                  "@context": "https://schema.org/",
+                  "type": "Rating",
+                  "bestRating": 1,
+                  "worstRating": 0,
+                  "ratingValue": value,
+                  "description": description
+              }
+          },
+          "signature": {
+              "type": format!("sec: {}", algorithm),
+              "http://purl.org/dc/terms/created": {
+                  "type": "http://www.w3.org/2001/XMLSchema#dateTime",
+                  "@value": "2017-03-04T10:05:07Z"
+              },
+              "http://purl.org/dc/terms/creator": {
+                  "id": "EcdsaKoblitz-public-key:020d79074ef137d4f338c2e6bef2a49c618109eccf1cd01ccc3286634789baef4b"
+              },
+              "sec:domain": "example.com",
+              "signature:Value": "IEd/NpCGX7cRe4wc1xh3o4X/y37pY4tOdt8WbYnaGw/Gbr2Oz7GqtkbYE8dxfxjFFYCrISPJGbBNFyaiVBAb6bs="
+          }
+
+        });
       },
+      Some(Commands::Graph { 
+        subcommand,
+        perspective,
+        creator,
+        target,
+        tags,
+        depth,
+        min_value,
+        max_value,
+       }) => {
+        // TODO: Graph command methods
+      },
+      None => {} // Default method or throw error?
     }
 
 
 }
 
 
-////
-
-//     // You can check the value provided by positional arguments, or option arguments
-//     if let Some(name) = cli.name.as_deref() {
-//         println!("Value for name: {}", name);
-//     }
-
-//     if let Some(config_path) = cli.config.as_deref() {
-//         println!("Value for config: {}", config_path.display());
-//     }
-
-//     // You can see how many times a particular flag or argument occurred
-//     // Note, only flags can have multiple occurrences
-//     match cli.debug {
-//         0 => println!("Debug mode is off"),
-//         1 => println!("Debug mode is kind of on"),
-//         2 => println!("Debug mode is on"),
-//         _ => println!("Don't be crazy"),
-//     }
-
-//     // You can check for the existence of subcommands, and if found use their
-//     // matches just as you would the top level cmd
-//     match &cli.command {
-//         Some(Commands::Test { list }) => {
-//             if *list {
-//                 println!("Printing testing lists...");
-//             } else {
-//                 println!("Not printing testing lists...");
-//             }
-//         }
-//         None => {}
-//     }
-
-//     // Continued program logic goes here...
-// }
+#[test]
+fn verify_cli() {
+    use clap::CommandFactory;
+    Cli::command().debug_assert()
+}

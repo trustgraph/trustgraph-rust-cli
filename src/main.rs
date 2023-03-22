@@ -29,53 +29,53 @@ fn main() {
 
   match &args.command {
       Some(Commands::Claim {
-        creator,
         target,
+        creator,
         tags,
         description,
         // extra,
         value,
-        algorithm, 
+        // algorithm, 
         private_key,
         target_format,
         write,
        }) => {
 
-        let john = json!({
+        // let json = json!({
 
-          "@context": "https://raw.githubusercontent.com/trustgraph/trustgraph-schema/gh-pages/TrustClaim.jsonld",
-          "type": target_format,
-          "issuer": creator,
-          "issued": "2017-03-04T02:05:07-08:00",
-          "claim": {
-              "@context": "https://schema.org/",
-              "type": "Review",
-              "itemReviewed": target,
-              "author": creator,
-              "keywords": tags,
-              "reviewRating": {
-                  "@context": "https://schema.org/",
-                  "type": "Rating",
-                  "bestRating": 1,
-                  "worstRating": 0,
-                  "ratingValue": value,
-                  "description": description
-              }
-          },
-          "signature": {
-              "type": format!("sec: {}", algorithm),
-              "http://purl.org/dc/terms/created": {
-                  "type": "http://www.w3.org/2001/XMLSchema#dateTime",
-                  "@value": "2017-03-04T10:05:07Z"
-              },
-              "http://purl.org/dc/terms/creator": {
-                  "id": "EcdsaKoblitz-public-key:020d79074ef137d4f338c2e6bef2a49c618109eccf1cd01ccc3286634789baef4b"
-              },
-              "sec:domain": "example.com",
-              "signature:Value": "IEd/NpCGX7cRe4wc1xh3o4X/y37pY4tOdt8WbYnaGw/Gbr2Oz7GqtkbYE8dxfxjFFYCrISPJGbBNFyaiVBAb6bs="
-          }
+        //   "@context": "https://raw.githubusercontent.com/trustgraph/trustgraph-schema/gh-pages/TrustClaim.jsonld",
+        //   "type": target_format,
+        //   "issuer": creator,
+        //   "issued": "2017-03-04T02:05:07-08:00",
+        //   "claim": {
+        //       "@context": "https://schema.org/",
+        //       "type": "Review",
+        //       "itemReviewed": target,
+        //       "author": creator,
+        //       "keywords": tags,
+        //       "reviewRating": {
+        //           "@context": "https://schema.org/",
+        //           "type": "Rating",
+        //           "bestRating": 1,
+        //           "worstRating": 0,
+        //           "ratingValue": value,
+        //           "description": description
+        //       }
+        //   },
+        //   "signature": {
+        //       "type": "EcdsaKoblitzSignature2016".to_string(),
+        //       "http://purl.org/dc/terms/created": {
+        //           "type": "http://www.w3.org/2001/XMLSchema#dateTime",
+        //           "@value": "2017-03-04T10:05:07Z"
+        //       },
+        //       "http://purl.org/dc/terms/creator": {
+        //           "id": "EcdsaKoblitz-public-key:020d79074ef137d4f338c2e6bef2a49c618109eccf1cd01ccc3286634789baef4b"
+        //       },
+        //       "sec:domain": "example.com",
+        //       "signature:Value": "IEd/NpCGX7cRe4wc1xh3o4X/y37pY4tOdt8WbYnaGw/Gbr2Oz7GqtkbYE8dxfxjFFYCrISPJGbBNFyaiVBAb6bs="
+        //   }
 
-        });
+        // });
       },
       Some(Commands::Graph { 
         subcommand,

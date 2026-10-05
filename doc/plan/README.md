@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-**Where we are:** PR #11 turned this repo from a "hello world" scaffold into
+**Where we are:** [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11) turned this repo from a "hello world" scaffold into
 `trust`, a working CLI and Rust library for the Trust Graph protocol. You can
 create identities, sign trust ratings as W3C Verifiable Credentials, store
 them, and explore them through your **Agent Lens**. It has 96 tests, CI on
@@ -27,15 +27,13 @@ and `trustgraph-holochain`'s test cases.
 5. **Friendlier UX.** Interactive `trust rate`, readable table output, and
    `trust lens --format dot|mermaid` to draw your graph.
 6. **Embed everywhere.** A WASM build of the library for web apps, so the
-   Trustcraft site, browser extensions and others all use the same code.
+   trustgraph.net, browser extensions and others all use the same code.
 7. **Harden.** Revoking and updating ratings, key rotation, Sybil-resistance
    research for the lens, and performance at 100k+ atoms.
 
 **Decisions I need from you** (details in [Open decisions](#open-decisions)):
 
-- **Trustcraft vs Trust Graph:** how should the names relate in the CLI,
-  crates and docs?
-- **Value range:** PR #11 uses `-1..=1` (from Holochain), but trustgraph.net
+- **Value range:** [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11) uses `-1..=1` (from Holochain), but trustgraph.net
   and the protocol README say `0..1`. Confirm, and I'll update those docs.
 - **Domain for schemas:** is `https://trustgraph.net/ns/v1` OK for the
   JSON-LD context?
@@ -49,7 +47,7 @@ Everything below this line is supporting detail.
 ## Context
 
 - **This repo** was last touched in September 2022: a clap 3 greeter plus a
-  TODO list ([Appendix A](#appendix-a-the-2022-todo-list)). PR #11 covers
+  TODO list ([Appendix A](#appendix-a-the-2022-todo-list)). [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11) covers
   every item on that list.
 - **Prior art** in the `trustgraph` org:
   - [`trustgraph/trustgraph`](https://github.com/trustgraph/trustgraph): the
@@ -64,11 +62,8 @@ Everything below this line is supporting detail.
   [FOSDEM 2022 talk](https://archive.fosdem.org/2022/schedule/event/trustgraphs/)
   describe Agents, the **Agent Lens**, the **Trust Cascade**, and trust
   **rollups**. All of these are now real commands.
-- I couldn't reach trustcraft.net (DNS lookup failed) or its video, so this
-  plan says nothing about what is specific to Trustcraft. Please check it
-  against that vision.
 
-## What shipped in PR #11
+## What shipped in [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11)
 
 | Area | Status |
 |---|---|
@@ -85,7 +80,7 @@ Everything below this line is supporting detail.
 ## Design principles
 
 1. **Library first.** All protocol logic lives in `trustgraph`, which has no
-   CLI dependencies. Every other component (web, Holochain, mobile, Trustcraft)
+   CLI dependencies. Every other component (web, Holochain, mobile)
    uses the same code instead of re-implementing the protocol.
 2. **Unix pipes.** JSON/NDJSON in and out, so commands compose:
    `trust lens --rollup | trust sign | trust add`.
@@ -157,7 +152,7 @@ pass in CI.
 ### 6. Embed everywhere
 
 - Compile `trustgraph` to WASM (`wasm-bindgen`) and publish an npm package
-  for web clients, including Trustcraft.
+  for web clients, including trustgraph.net.
 - Optional C ABI or UniFFI bindings for mobile.
 
 ### 7. Harden
@@ -176,13 +171,12 @@ pass in CI.
 
 | # | Question | Recommendation |
 |---|---|---|
-| 1 | How Trustcraft and Trust Graph relate | Waiting on you |
-| 2 | Value range | Keep `-1..=1`; `0..1` data is still valid. Update the website and protocol README |
-| 3 | JSON-LD context URL | `https://trustgraph.net/ns/v1` |
-| 4 | Crate names | `trustgraph` (library) and `trust-cli` (binary `trust`) |
-| 5 | Copyright line in LICENSE | Currently the unfilled Apache template; e.g. "Trust Graph contributors" |
-| 6 | Sharing transport order | HTTPS feeds first (no servers), then Holochain |
-| 7 | MSRV policy | Stable minus about 6 releases; raise it on purpose, never by accident |
+| 1 | Value range | Keep `-1..=1`; `0..1` data is still valid. Update the website and protocol README |
+| 2 | JSON-LD context URL | `https://trustgraph.net/ns/v1` |
+| 3 | Crate names | `trustgraph` (library) and `trust-cli` (binary `trust`) |
+| 4 | Copyright line in LICENSE | Currently the unfilled Apache template; e.g. "Trust Graph contributors" |
+| 5 | Sharing transport order | HTTPS feeds first (no servers), then Holochain |
+| 6 | MSRV policy | Stable minus about 6 releases; raise it on purpose, never by accident |
 
 ## Appendix A: the 2022 TODO list
 
@@ -190,8 +184,8 @@ From `src/main.rs` (September 2022):
 
 | 2022 TODO | Status |
 |---|---|
-| decide on some initial use cases | ✅ rate, sign, verify, store, query, lens (PR #11) |
-| make ArgGroup, make prompts that enforce things | ✅ validation in PR #11; interactive prompts in Phase 5 |
+| decide on some initial use cases | ✅ rate, sign, verify, store, query, lens ([PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11)) |
+| make ArgGroup, make prompts that enforce things | ✅ validation in [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11); interactive prompts in Phase 5 |
 | call an API? write to trustgraph right now? | Phases 2 and 3 |
 | what is the interface between CLI and backend? is there a backend? | ✅ The library is the interface; backends are optional plug-ins |
 | spit out jsonld and optionally pipe to storages | ✅ VC 2.0 JSON-LD on stdout; `trust add` stores it |

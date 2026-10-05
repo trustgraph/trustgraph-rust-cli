@@ -1,9 +1,8 @@
+use std::io::{self, Write};
+use std::process::ExitCode;
+
 use clap::Parser;
-
-/// Simple program to greet a person
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-
+use trustgraph_rust_cli::{Cli, run};
 
 /* TODO next:
 
@@ -21,20 +20,17 @@ use clap::Parser;
 
 */
 
-struct Args {
-   /// Name of the person to greet
-   #[clap(short, long, value_parser)]
-   name: String,
+fn main() -> ExitCode {
+    let cli = Cli::parse();
+    let mut stdout = io::stdout().lock();
 
-   /// Number of times to greet
-   #[clap(short, long, value_parser, default_value_t = 1)]
-   count: u8,
-}
-
-fn main() {
-   let args = Args::parse();
-
-   for _ in 0..args.count {
-       println!("Hello {}!", args.name)
-   }
+    match run(&cli, &mut stdout).and_then(|()| stdout.flush()) {
+        Ok(()) => ExitCode::SUCCESS,
+        // Being piped into `head` or similar is not an error.
+        Err(err) if err.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("error: {err}");
+            ExitCode::FAILURE
+        }
+    }
 }

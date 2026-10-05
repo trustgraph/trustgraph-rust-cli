@@ -1,9 +1,26 @@
 [package]
 name = "trustgraph-rust-cli"
 version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+edition = "2024"
+rust-version = "1.85"
+description = "Command line interface for Trust Graph"
+repository = "https://github.com/trustgraph/trustgraph-rust-cli"
+readme = "README.md"
+keywords = ["trust", "reputation", "trustgraph", "cli"]
+categories = ["command-line-utilities"]
+publish = false
 
 [dependencies]
-clap = { version = "3.2.22", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
+
+[dev-dependencies]
+assert_cmd = "2.2"
+predicates = "3.1"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

@@ -1,36 +1,46 @@
-# Trust Graph CLI — Roadmap
+# Trust Graph CLI: Roadmap
 
 ## TL;DR
 
-**Goal:** turn this repo from a "hello world" scaffold into `trust`, the CLI and
-Rust library that every other Trust Graph / Trustcraft component builds on.
+**Where we are:** PR #11 turned this repo from a "hello world" scaffold into
+`trust`, a working CLI and Rust library for the Trust Graph protocol. You can
+create identities, sign trust ratings as W3C Verifiable Credentials, store
+them, and explore them through your **Agent Lens**. It has 96 tests, CI on
+three operating systems, and is checked against the W3C spec's test vectors
+and `trustgraph-holochain`'s test cases.
 
-**The plan, in order:**
+**What's missing:** atoms only live on your own machine. The next big step is
+**sharing**: getting atoms from me to you, and back.
 
-1. **Foundation** (separate PR, ready): clap 4, edition 2024, lib + bin split,
-   19 tests, CI on Linux/macOS/Windows, Dependabot.
-2. **Core data model**: a `trustgraph-core` library crate with a typed,
-   validated `TrustAtom` (`source`, `target`, `content`, `value`, `timestamp`,
-   `extra`), canonical JSON, and content-addressed IDs.
-3. **Identity & signing**: `did:key` Ed25519 identities, a local keystore,
-   and signed claims as W3C Verifiable Credentials 2.0 (`eddsa-jcs-2022`).
-4. **Real commands**: rename the binary to `trust`; `trust key`, `trust atom
-   create`, `trust verify`, `trust convert`. JSON on stdout so commands pipe.
-5. **Storage**: a pluggable `Store` trait; local file store first, then a
-   Holochain adapter that speaks the existing `trustgraph-holochain` link-tag
-   format.
-6. **Graph queries**: `trust query` and `trust map` (transitive trust with
-   depth limits and topic filters).
-7. **Release**: tagged releases with prebuilt binaries, crates.io, Homebrew.
+**Next steps, in order:**
+
+1. **Lock the data format.** Publish the JSON-LD context and JSON Schema at
+   `trustgraph.net`, and freeze the atom and credential shapes as v1.
+2. **Share over HTTPS.** `trust publish` writes a signed feed you can host
+   anywhere (GitHub Pages, any static host). `trust follow <url>` and
+   `trust pull` fetch other people's feeds. This gives a working network with
+   no servers to run.
+3. **Holochain.** Read and write atoms on a live conductor using the existing
+   `trustgraph-holochain` zome. The link-tag codec is already done.
+4. **Release.** Prebuilt binaries for macOS, Linux and Windows, Homebrew, and
+   `cargo install trust-cli`. Publish the `trustgraph` crate.
+5. **Friendlier UX.** Interactive `trust rate`, readable table output, and
+   `trust lens --format dot|mermaid` to draw your graph.
+6. **Embed everywhere.** A WASM build of the library for web apps, so the
+   Trustcraft site, browser extensions and others all use the same code.
+7. **Harden.** Revoking and updating ratings, key rotation, Sybil-resistance
+   research for the lens, and performance at 100k+ atoms.
 
 **Decisions I need from you** (details in [Open decisions](#open-decisions)):
 
-- **License**: this repo has none; the other `trustgraph` repos use Apache-2.0. Use that here too?
-- **Value range**: the protocol README says `0..1`; `trustgraph-holochain` allows
-  `-0.999999999..0.999999999` (negative trust). Which is canonical?
-- **Binary name**: `trust` (matches the old JS CLI and protocol docs)?
-- **Trustcraft vs Trust Graph**: how should the names relate in the CLI,
-  crate names and docs?
+- **Trustcraft vs Trust Graph:** how should the names relate in the CLI,
+  crates and docs?
+- **Value range:** PR #11 uses `-1..=1` (from Holochain), but trustgraph.net
+  and the protocol README say `0..1`. Confirm, and I'll update those docs.
+- **Domain for schemas:** is `https://trustgraph.net/ns/v1` OK for the
+  JSON-LD context?
+- **Crate names:** OK to publish `trustgraph` and `trust-cli` on crates.io?
+  Note that an unrelated AI company is also called "TrustGraph".
 
 Everything below this line is supporting detail.
 
@@ -38,181 +48,151 @@ Everything below this line is supporting detail.
 
 ## Context
 
-- The repo was last touched in September 2022. It contained a clap 3 greeter
-  plus a TODO list (reproduced in [Appendix A](#appendix-a-the-2022-todo-list)).
-  Every item on that list is covered by a phase below.
-- Prior art in the `trustgraph` org that this plan builds on:
+- **This repo** was last touched in September 2022: a clap 3 greeter plus a
+  TODO list ([Appendix A](#appendix-a-the-2022-todo-list)). PR #11 covers
+  every item on that list.
+- **Prior art** in the `trustgraph` org:
   - [`trustgraph/trustgraph`](https://github.com/trustgraph/trustgraph): the
-    protocol. Trust Atoms, signed VC-style claims, canonical JSON, multihash IDs.
-  - [`trustgraph/trustgraph-schema`](https://github.com/trustgraph/trustgraph-schema):
-    the `TrustClaim.jsonld` context.
-  - [`trustgraph/js-trustgraph-cli`](https://github.com/trustgraph/js-trustgraph-cli)
-    (archived): `trust claim`, `trust get`, `trust map`. This is the UX to
-    match and improve on.
+    protocol README (Trust Atoms, signed claims, multihash IDs).
   - [`trustgraph/trustgraph-holochain`](https://github.com/trustgraph/trustgraph-holochain):
-    Rust Trust Atoms stored as Holochain links. The tag encoding is
-    `Ŧ→\0content\0value\0bucket\0extra`.
-- I couldn't reach trustcraft.net from the build environment (DNS lookup
-  failed), so I haven't seen the site or the video. This plan is based on the
-  repos above. Please check it against the Trustcraft vision before it's merged.
+    atoms stored as Holochain links (`Ŧ→content\0value\0bucket\0extra`).
+  - [`trustgraph/js-trustgraph-cli`](https://github.com/trustgraph/js-trustgraph-cli)
+    (archived): `trust claim`, `trust get`, `trust map`.
+  - [`trustgraph/trustgraph-schema`](https://github.com/trustgraph/trustgraph-schema):
+    the 2017 `TrustClaim.jsonld` context.
+- **trustgraph.net** and the
+  [FOSDEM 2022 talk](https://archive.fosdem.org/2022/schedule/event/trustgraphs/)
+  describe Agents, the **Agent Lens**, the **Trust Cascade**, and trust
+  **rollups**. All of these are now real commands.
+- I couldn't reach trustcraft.net (DNS lookup failed) or its video, so this
+  plan says nothing about what is specific to Trustcraft. Please check it
+  against that vision.
+
+## What shipped in PR #11
+
+| Area | Status |
+|---|---|
+| Workspace: `trustgraph` library + `trust` binary | ✅ |
+| Trust Atoms, validation, canonical JSON (RFC 8785), `Qm…` content IDs | ✅ |
+| Values: exact decimals in `-1..=1`, Holochain-compatible normalization | ✅ |
+| `did:key` Ed25519 identities, keystore (`0600`) | ✅ |
+| W3C VC 2.0 + `eddsa-jcs-2022` sign/verify (passes the spec's test vectors) | ✅ |
+| Holochain link-tag encode/decode | ✅ |
+| Local append-only store, verified on the way in | ✅ |
+| Agent Lens / Trust Cascade, topic filters, rollups | ✅ |
+| CI (3 OSes, MSRV, clippy pedantic, rustdoc), Dependabot, Apache-2.0 | ✅ |
 
 ## Design principles
 
-1. **Library first, CLI second.** All logic lives in library crates. The
-   binary only parses arguments and formats output. Other components (web,
-   Holochain, mobile) use the same crate instead of re-implementing the protocol.
-2. **Unix pipes.** Commands read and write JSON / NDJSON on stdin/stdout, so
-   `trust atom create … | trust sign | trust publish --to holochain` works, and
-   so does piping into `jq`. This is the "spit out jsonld and optionally pipe"
-   item from the 2022 TODO list.
-3. **Interoperable by default.** Use standards where they exist: DIDs, W3C
-   VC 2.0, JCS (RFC 8785) canonicalization, multihash/CID. Support Trust Graph's
-   own formats as conversions.
-4. **Offline-capable.** Creating, signing and verifying claims never needs a
-   network or a backend. Backends are optional plug-ins. This answers the 2022
-   question "is there a backend?"
-5. **Tested at every layer.** Unit tests, golden-file tests against the
-   protocol examples, property tests for encode/decode round trips, and
-   end-to-end CLI tests. CI must stay green.
+1. **Library first.** All protocol logic lives in `trustgraph`, which has no
+   CLI dependencies. Every other component (web, Holochain, mobile, Trustcraft)
+   uses the same code instead of re-implementing the protocol.
+2. **Unix pipes.** JSON/NDJSON in and out, so commands compose:
+   `trust lens --rollup | trust sign | trust add`.
+3. **Standards over invention.** DIDs, VC 2.0, Data Integrity, JCS, multihash.
+   Trust Graph's own formats are conversions on top.
+4. **Offline first, servers optional.** Creating, signing, verifying and
+   exploring never need the network. Sharing is a plug-in.
+5. **Agent-centric.** There is no global score, ever. Every result is from
+   someone's point of view.
+6. **Proven, not hoped.** Every format has spec vectors, property tests, or
+   cross-implementation fixtures, and CI stays green.
 
-## Target architecture
+## Next phases
 
-```
-trustgraph-rust-cli/            (cargo workspace)
-├── crates/
-│   ├── trustgraph-core/        TrustAtom, validation, canonical JSON, IDs   (no I/O)
-│   ├── trustgraph-identity/    keys, did:key, keystore, sign/verify
-│   ├── trustgraph-formats/     VC 2.0 / JSON-LD, Holochain link tag, legacy TrustClaim
-│   ├── trustgraph-store/       Store trait + file/SQLite impl
-│   └── trustgraph-graph/       traversal, scoring, topic filters
-└── src/ (bin: `trust`)         clap commands → library calls → stdout
-```
+Each phase is a few small PRs, and is done only when its acceptance criteria
+pass in CI.
 
-Adapters that need heavy dependencies (Holochain, IPFS) go behind cargo
-features or into separate crates, so the core build stays small and fast.
+### 1. Lock the v1 data format
 
-## Phases
+- Publish `https://trustgraph.net/ns/v1` (JSON-LD context) and a JSON Schema
+  generated from the Rust types (`schemars`), in `trustgraph-schema`.
+- Document the atom and credential formats in the protocol README, replacing
+  the 2017 `TrustClaim` example, and update trustgraph.net to match the
+  decided value range.
+- Add golden files of real atoms and credentials to the repo; CI fails if
+  the bytes ever change.
+- **Acceptance:** an off-the-shelf VC library (e.g. Digital Bazaar's
+  `@digitalbazaar/vc` with the `eddsa-jcs-2022` suite) verifies a credential
+  signed by `trust`.
 
-Each phase is one or more small PRs. A phase is done only when its acceptance
-criteria pass in CI.
+### 2. Share over HTTPS
 
-### Phase 0 — Foundation ✅ (PR open)
+- `trust publish [--out DIR]`: write your signed atoms as a static feed
+  (`atoms.ndjson` plus a small signed index) that any static host can serve.
+- `trust follow <url>` / `trust unfollow` / `trust pull`: fetch feeds and
+  verify every atom before storing it. Use ETags so repeat pulls are cheap.
+- Optional discovery via `/.well-known/trust/atoms.ndjson`, plus `did:web` so
+  an organization can sign with its own domain.
+- **Acceptance:** two machines exchange atoms through GitHub Pages, and each
+  sees the other in `trust lens`.
 
-- clap 3 → 4.6, edition 2024, MSRV 1.85, refreshed lockfile.
-- lib + bin split, error/exit-code handling (broken pipes, write errors).
-- 12 unit tests and 7 end-to-end tests. CI: fmt, clippy (pedantic, `-D
-  warnings`), tests on three OSes, MSRV job. Dependabot.
+### 3. Holochain
 
-### Phase 1 — Core data model (`trustgraph-core`)
+- An adapter behind a cargo feature (`--features holochain`) that talks to a
+  conductor through `holochain_client`: `trust publish --to holochain`,
+  `trust pull --from holochain`.
+- Map `did:key` identities to Holochain agent keys (both are Ed25519).
+- Upstream fix: for tiny values, `trustgraph-holochain`'s value strings can
+  exceed the documented 12-character limit (`-.00000000100000000`). `trust`
+  falls back to nine decimal places for these; align the zome to match.
+- **Acceptance:** an atom created by `trust` round-trips through a real
+  conductor in an integration test (nix or a container in CI).
 
-- Convert to a cargo workspace and add `trustgraph-core`.
-- `TrustAtom { source, target, content, value, timestamp, extra }`, with
-  `serde` support. Use a `Value` newtype that rejects anything outside the
-  agreed range and preserves the string form (e.g. `"0.999999999"`).
-- `Target` accepts DIDs, URLs and other identifiers, parsed and validated.
-- Canonical JSON using JCS / RFC 8785. Content ID = CIDv1 (sha2-256), so the
-  Qm… multihash IDs from the protocol docs can still be computed.
-- **Acceptance:** golden tests reproduce the canonical JSON and hash from
-  the protocol README; `proptest` shows serialize → parse → serialize is stable;
-  no `unsafe`; 100% of public items documented.
+### 4. Release
 
-### Phase 2 — Identity & signing (`trustgraph-identity`)
+- `cargo-dist` for prebuilt binaries and shell/PowerShell installers, plus a
+  Homebrew tap. `release-plz` for versioning and the CHANGELOG.
+- Publish `trustgraph` and `trust-cli` on crates.io once Phase 1 is frozen.
+- `cargo deny` (licenses and advisories) and coverage (`cargo llvm-cov`) in CI.
 
-- Generate and import Ed25519 keys and show them as `did:key`.
-- Keystore under the platform config dir (`directories` crate), with file
-  permissions `0600`. Optional OS keychain support via the `keyring` crate.
-- Sign and verify W3C VC 2.0 credentials with the Data Integrity
-  `eddsa-jcs-2022` cryptosuite. This avoids full RDF canonicalization.
-- **Acceptance:** sign → verify round trip; tampering with any field fails
-  verification; passes the published `eddsa-jcs-2022` test vectors.
+### 5. Friendlier UX
 
-### Phase 3 — The `trust` CLI
+- `trust rate`: interactive prompts when stdin is a TTY (the 2022 TODO list's
+  "prompts that enforce things"), using `dialoguer`.
+- `--format table` for humans; JSON stays the default when piped.
+- `trust lens --format dot|mermaid` to draw your trust graph.
+- Named contacts (`trust contact add bob did:key:…`) so you don't paste DIDs.
 
-Rename the binary to `trust` and replace the greeter with:
+### 6. Embed everywhere
 
-| Command | Purpose |
-|---|---|
-| `trust key new / list / show / export` | Manage identities |
-| `trust atom create --target … --value … --content … [--tags …]` | Build an unsigned atom |
-| `trust sign [--key …]` | Sign an atom or credential read from stdin |
-| `trust verify` | Verify a signed claim read from stdin; exit code shows the result |
-| `trust convert --to vc\|atom\|holochain-tag\|legacy-claim` | Convert between formats |
-| `trust completions <shell>` | Shell completions (`clap_complete`) |
+- Compile `trustgraph` to WASM (`wasm-bindgen`) and publish an npm package
+  for web clients, including Trustcraft.
+- Optional C ABI or UniFFI bindings for mobile.
 
-Also: `--output json|ndjson|pretty`, `--quiet`, structured errors (`miette`
-or `anyhow` with context), and exit codes 0 for success, 1 for errors, 2 for
-usage errors. Where it fits, match the archived JS CLI's flags
-(`--target`, `--value`, `--tags`, `--description`) so existing docs and users
-carry over.
+### 7. Harden
 
-- **Acceptance:** `trust key new && trust atom create … | trust sign | trust
-  verify` succeeds end to end in an `assert_cmd` test; `--help` snapshots
-  are checked with `insta`.
-
-### Phase 4 — Storage (`trustgraph-store`)
-
-- `Store` trait: `put`, `get(id)`, `query(filter)`, all async-ready.
-- First backend: a local append-only NDJSON or SQLite store (`trust store
-  add|get|ls`).
-- Holochain adapter: encode and decode the existing link-tag format
-  (`Ŧ` header, direction byte, NUL separators, 900-byte content cap, 12-char
-  value cap). Start with the pure encode/decode functions. Talk to a conductor
-  later.
-- Later: IPFS / HTTP publish, behind feature flags.
-- **Acceptance:** round-trip tests against tag fixtures from
-  `trustgraph-holochain`'s test suite; store conformance tests that every
-  backend must pass.
-
-### Phase 5 — Graph queries (`trustgraph-graph`)
-
-- `trust query --source/--target/--content-prefix` (mirrors the Holochain
-  `QueryInput`).
-- `trust map <did> --depth N --topic sushi`: transitive trust from one identity's
-  point of view, with per-hop decay. This is the protocol's "cascading
-  network of the trust networks they are most closely connected to".
-- Output as JSON, plus DOT/Mermaid for visualization.
-- **Acceptance:** deterministic scores on fixture graphs, including cycles
-  and negative edges if Phase 1 allows them; benchmarks with `criterion`
-  on graphs of 100k atoms.
-
-### Phase 6 — Release & distribution
-
-- Releases with `cargo-dist` (prebuilt binaries, shell and PowerShell
-  installers, Homebrew tap). Versioning with `release-plz` and a generated
-  CHANGELOG.
-- Publish the library crates to crates.io once the APIs settle (target 0.1).
-- `cargo deny` (licenses and advisories) and `cargo audit` in CI. Test
-  coverage reporting with `cargo llvm-cov`.
-
-### Phase 7 — Ecosystem
-
-- WASM build of `trustgraph-core` + `-identity` for browser and JS clients.
-- JSON Schema generated from the Rust types (`schemars`) and published with
-  `trustgraph-schema`.
-- Update the `trustgraph/trustgraph` protocol README to point to this CLI as
-  the reference implementation.
+- **Revocation and updates:** a newer atom from the same source replaces an
+  older one (the lens already prefers the latest); add explicit revocation
+  atoms and Bitstring Status Lists for credentials.
+- **Key rotation:** `did:key` can't rotate. Support `did:web` and/or `did:plc`,
+  with signed key-succession statements.
+- **Lens research:** compare the cascade with EigenTrust and Appleseed; study
+  Sybil resistance; add `criterion` benchmarks on 100k+ atom graphs.
+- **Privacy:** private atoms (encrypted to recipients) and selective sharing,
+  as the protocol README calls for.
 
 ## Open decisions
 
 | # | Question | Recommendation |
 |---|---|---|
-| 1 | License for this repo (none today) | Apache-2.0, to match `trustgraph/trustgraph` |
-| 2 | Value range: `0..1` (protocol README) or `-1..1` (Holochain) | `-1..1`: negative trust is useful, and `0..1` data stays valid |
-| 3 | Binary name | `trust` |
-| 4 | Claim format | W3C VC 2.0 + `eddsa-jcs-2022` as the main format; legacy `TrustClaim` only as a conversion |
-| 5 | Repo shape | One workspace in this repo. Split crates out only if needed |
-| 6 | Trustcraft naming | Waiting on your input |
-| 7 | MSRV policy | Stable minus ~6 releases; raise it on purpose, never by accident |
+| 1 | How Trustcraft and Trust Graph relate | Waiting on you |
+| 2 | Value range | Keep `-1..=1`; `0..1` data is still valid. Update the website and protocol README |
+| 3 | JSON-LD context URL | `https://trustgraph.net/ns/v1` |
+| 4 | Crate names | `trustgraph` (library) and `trust-cli` (binary `trust`) |
+| 5 | Copyright line in LICENSE | Currently the unfilled Apache template; e.g. "Trust Graph contributors" |
+| 6 | Sharing transport order | HTTPS feeds first (no servers), then Holochain |
+| 7 | MSRV policy | Stable minus about 6 releases; raise it on purpose, never by accident |
 
 ## Appendix A: the 2022 TODO list
 
-From `src/main.rs` (Sept 2022), mapped to the phases above:
+From `src/main.rs` (September 2022):
 
-| 2022 TODO | Where it lands |
+| 2022 TODO | Status |
 |---|---|
-| decide on some initial use cases | Phase 3 command table (create / sign / verify / query / map) |
-| make ArgGroup, make prompts that enforce things | Phase 3 (clap `ArgGroup`s; interactive prompts via `dialoguer` when stdin is a TTY) |
-| call an API? write to trustgraph right now? | Phase 4 `Store` backends |
-| what is the interface between CLI and backend? is there a backend? | Principles 1 and 4: a library API, and backends are optional |
-| spit out jsonld and optionally pipe to storages | Principle 2 + Phase 4 |
-| make separate components for cli, and pipes | Target architecture (workspace crates) |
+| decide on some initial use cases | ✅ rate, sign, verify, store, query, lens (PR #11) |
+| make ArgGroup, make prompts that enforce things | ✅ validation in PR #11; interactive prompts in Phase 5 |
+| call an API? write to trustgraph right now? | Phases 2 and 3 |
+| what is the interface between CLI and backend? is there a backend? | ✅ The library is the interface; backends are optional plug-ins |
+| spit out jsonld and optionally pipe to storages | ✅ VC 2.0 JSON-LD on stdout; `trust add` stores it |
+| make separate components for cli, and pipes | ✅ `trustgraph` library + `trust` binary |

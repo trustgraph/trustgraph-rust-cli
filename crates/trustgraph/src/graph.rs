@@ -320,7 +320,7 @@ mod tests {
         assert_eq!(one.keys().collect::<Vec<_>>(), ["bob"]);
         let two = lens(&atoms, "alice", &LensOptions { depth: 2, ..LensOptions::default() });
         assert_eq!(two.keys().collect::<Vec<_>>(), ["bob", "carol"]);
-        assert!(lens(&atoms, "alice", &LensOptions { depth: 0, ..LensOptions::default() }).is_empty());
+        assert_eq!(lens(&atoms, "alice", &LensOptions { depth: 0, ..LensOptions::default() }).len(), 0);
     }
 
     #[test]
@@ -416,8 +416,8 @@ mod tests {
     #[test]
     fn atoms_without_values_are_ignored() {
         let graph: TrustGraph = [TrustAtom::new("alice", "bob")].iter().collect();
-        assert!(graph.is_empty());
-        assert!(graph.lens("alice", &LensOptions::default()).is_empty());
+        assert_eq!(graph.len(), 0);
+        assert_eq!(graph.lens("alice", &LensOptions::default()), []);
     }
 
     #[test]

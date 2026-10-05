@@ -189,7 +189,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nested/atoms.ndjson");
         let mut store = Store::open(&path).unwrap();
-        assert!(store.is_empty());
+        assert_eq!(store.len(), 0);
         assert!(store.add(record("a", "b", "x")).unwrap());
         assert!(!store.add(record("a", "b", "x")).unwrap());
         assert!(store.add(record("a", "c", "x")).unwrap());

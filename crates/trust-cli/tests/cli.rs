@@ -234,7 +234,7 @@ fn lens_and_rollups() {
 
     assert_eq!(env.json_lines(&["lens", "--topic", "sushi", "--depth", "1"], "").len(), 1);
     assert_eq!(env.json_lines(&["lens", "--topic", "sushi", "--limit", "2"], "").len(), 2);
-    assert!(env.run(&["lens", "--topic", "ramen"], "").is_empty());
+    assert_eq!(env.run(&["lens", "--topic", "ramen"], ""), "");
     assert_eq!(env.json_lines(&["lens", &bob, "--topic", "sushi"], "").len(), 2);
 
     // Rollups are atoms from the agent that can be signed, verified, and stored.

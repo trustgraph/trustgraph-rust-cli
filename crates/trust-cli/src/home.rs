@@ -129,7 +129,7 @@ mod tests {
     fn keys_round_trip_and_are_private() {
         let dir = tempfile::tempdir().unwrap();
         let home = Home::new(Some(dir.path().to_path_buf())).unwrap();
-        assert!(home.list_keys().unwrap().is_empty());
+        assert_eq!(home.list_keys().unwrap(), []);
         assert!(home.load_key("default").is_err());
 
         let keypair = Keypair::generate().unwrap();

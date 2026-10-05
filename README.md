@@ -122,15 +122,19 @@ CLI dependencies so other components can embed it:
 ```rust
 use trustgraph::{credential, Keypair, LensOptions, TrustAtom, TrustGraph};
 
-let alice = Keypair::generate()?;
-let atom = TrustAtom::new(alice.did().to_string(), "https://sushi.example")
-    .with_content("sushi")
-    .with_value("0.9".parse()?);
-let signed = credential::sign_atom(&atom, &alice, jiff::Timestamp::now())?;
-assert_eq!(credential::verify_atom(&signed)?, atom);
+fn main() -> Result<(), trustgraph::Error> {
+    let alice = Keypair::generate()?;
+    let atom = TrustAtom::new(alice.did().to_string(), "https://sushi.example")
+        .with_content("sushi")
+        .with_value("0.9".parse()?);
+    let signed = credential::sign_atom(&atom, &alice, jiff::Timestamp::now())?;
+    assert_eq!(credential::verify_atom(&signed)?, atom);
 
-let graph: TrustGraph = [atom].iter().collect();
-let view = graph.lens(alice.did().as_str(), &LensOptions::default());
+    let graph: TrustGraph = [atom].iter().collect();
+    let view = graph.lens(alice.did().as_str(), &LensOptions::default());
+    assert_eq!(view[0].target, "https://sushi.example");
+    Ok(())
+}
 ```
 
 ## Development

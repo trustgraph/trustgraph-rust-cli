@@ -44,3 +44,9 @@ pub use id::ContentId;
 pub use keys::{Did, Keypair, PublicKey};
 pub use store::{Query, Record, Store};
 pub use value::Value;
+
+/// Compiles and runs the Rust examples in the repository README, so they
+/// never go stale.
+#[cfg(doctest)]
+#[doc = include_str!("../../../README.md")]
+pub struct ReadmeDoctests;

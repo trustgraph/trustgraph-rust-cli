@@ -184,7 +184,7 @@ New projects go in this repo:
 
 - **Rust crates** go in `crates/<name>`. The Cargo workspace picks up
   `crates/*` automatically.
-- **TypeScript packages** go in `packages/<name>`. The root npm workspace
+- **TypeScript packages** go in `packages/<name>`. The pnpm workspace
   picks up `packages/*` automatically.
 
 ### Languages: Rust first, TypeScript where it fits
@@ -207,11 +207,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 scripts/check-core-purity.sh              # the core must stay free of I/O
 
-# JavaScript / TypeScript (npm workspaces, from the repo root)
-npm ci
-npm run build:node && npm run test:node   # native addon
+# JavaScript / TypeScript (pnpm workspace, from the repo root)
+pnpm install
+pnpm run build:node && pnpm run test:node   # native addon
 scripts/build-wasm-package.sh             # WebAssembly package → target/npm/trustgraph-wasm
-npm run typecheck
+pnpm run typecheck
 ```
 
 The signing code is checked against the W3C `eddsa-jcs-2022` test vectors, and

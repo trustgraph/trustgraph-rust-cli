@@ -27,7 +27,7 @@ one CI run:
 
 - **`crates/*`** is a Cargo workspace. All protocol logic is Rust, in
   `trustgraph-core`.
-- **`packages/*`** (plus the npm-facing crates) is an npm workspace, for
+- **`packages/*`** (plus the npm-facing crates) is a pnpm workspace, for
   TypeScript where it fits: web front ends, Convex functions, browser
   extensions, glue.
 - **The rule across languages:** TypeScript calls the Rust core through the
@@ -136,8 +136,8 @@ CI fails if the wasm grows past 1 MiB.
 # CLI
 cargo install --path crates/trustgraph-cli
 
-# JavaScript tooling (npm workspaces, from the repo root)
-npm ci
+# JavaScript tooling (pnpm workspace, from the repo root)
+pnpm install
 
 # WebAssembly package → target/npm/trustgraph-wasm (web/ + node/ builds)
 rustup target add wasm32-unknown-unknown
@@ -145,7 +145,7 @@ cargo install wasm-bindgen-cli --version <wasm-bindgen version in Cargo.lock>
 scripts/build-wasm-package.sh
 
 # Native package for this machine → crates/trustgraph-node
-npm run build:node && npm run test:node
+pnpm run build:node && pnpm run test:node
 ```
 
 The native package uses napi-rs's per-platform layout (one small npm package

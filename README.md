@@ -207,7 +207,8 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 scripts/check-core-purity.sh              # the core must stay free of I/O
 
-# JavaScript / TypeScript (pnpm workspace, from the repo root)
+# JavaScript / TypeScript (pnpm workspace, from the repo root; latest Node LTS, see .nvmrc)
+nvm use                                   # or fnm / volta: Node 24 today
 pnpm install
 pnpm run build:node && pnpm run test:node   # native addon
 scripts/build-wasm-package.sh             # WebAssembly package → target/npm/trustgraph-wasm

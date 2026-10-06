@@ -90,7 +90,7 @@ the packages are proven to behave identically.
 |---|---|---|
 | Trust scores inside live, reactive queries (e.g. a Convex query, so the UI updates on its own) | **WebAssembly** | Native addons can't run in Convex's default runtime; WebAssembly can, and is deterministic |
 | Browsers, Cloudflare Workers, Deno | **WebAssembly** | Runs anywhere WebAssembly runs; 547 KiB (229 KiB gzipped) |
-| Heavy batch work: full-graph recomputes, crawling, mass verification | **Native** in a Node process or Convex Node action, or the **CLI** outside Convex writing results back over HTTP | About 2–3× faster than WebAssembly; more memory headroom |
+| Heavy batch work: full-graph recomputes, crawling, mass verification | **Native** in a Node process or Convex Node action, or the **CLI** outside Convex writing results back over HTTP | Faster than WebAssembly (up to 3–4× on verification); more memory headroom |
 | People, scripts and other projects | **CLI** | No JavaScript or Convex involved |
 
 ### Convex specifics
@@ -110,16 +110,16 @@ the packages are proven to behave identically.
 ## Measured performance
 
 From [`tests/js/bench.mjs`](../tests/js/bench.mjs) in a Linux x86-64 cloud
-container with Node 22, on a synthetic graph with a topic filter. CI prints
-the same benchmark on every run:
+container with Node 24 (the current LTS), on a synthetic graph with a topic
+filter, averaged over two runs. CI prints the same benchmark on every run:
 
 | | WebAssembly | Native |
 |---|---|---|
-| Module load | 4.7 ms | 0.9 ms |
-| `lens`, 1,000 atoms | 8.7 ms | 3.5 ms |
-| `lens`, 10,000 atoms | 70 ms | 48 ms |
-| `lens`, 100,000 atoms | 0.78 s | 0.48 s |
-| `verify`, one credential | 0.29 ms | 0.08 ms |
+| Module load | 4.5 ms | 2.7 ms |
+| `lens`, 1,000 atoms | 8.3 ms | 3.5 ms |
+| `lens`, 10,000 atoms | 51 ms | 35 ms |
+| `lens`, 100,000 atoms | 0.54 s | 0.43 s |
+| `verify`, one credential | 0.26 ms | 0.07 ms |
 | Package size | 547 KiB wasm (229 KiB gzipped) | 1.2 MB (Linux x64) |
 
 Against Convex's limits for queries and mutations (1 s, 64 MiB, 32 MiB
@@ -129,6 +129,15 @@ bundle): graphs up to tens of thousands of atoms fit comfortably. Beyond about
 signatures in bulk inside a query is the expensive part; do it on write.
 
 CI fails if the wasm grows past 1 MiB.
+
+## Node versions
+
+- **Development and CI** use the latest Node LTS: `.nvmrc` says `lts/*`
+  (Node 24 today), so CI moves to the next LTS automatically when it is
+  promoted. The root `package.json` asks for Node 24 or newer.
+- **The published packages** support Node 22 and newer, the oldest release
+  line still maintained, so they work in every Convex Node runtime still
+  receiving updates. CI runs the smoke test on Node 22 to keep that promise.
 
 ## Building
 

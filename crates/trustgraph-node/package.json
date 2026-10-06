@@ -23,7 +23,7 @@
     "trustgraph.d.ts"
   ],
   "engines": {
-    "node": ">= 18"
+    "node": ">= 22"
   },
   "napi": {
     "binaryName": "trustgraph",

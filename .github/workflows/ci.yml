@@ -69,7 +69,7 @@ jobs:
       - uses: pnpm/action-setup@v4  # version from packageManager in package.json
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc  # latest LTS
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: cargo clippy --target wasm32-unknown-unknown -p trustgraph-core -p trustgraph-wasm --locked
@@ -95,8 +95,11 @@ jobs:
       - uses: pnpm/action-setup@v4  # version from packageManager in package.json
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc  # latest LTS
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build:node
       - run: pnpm run test:node
+      - name: Oldest supported Node (22)
+        if: runner.os == 'Linux'
+        run: npx -y node@22 tests/js/smoke.mjs crates/trustgraph-node/index.js

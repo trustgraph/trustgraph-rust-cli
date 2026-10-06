@@ -9,7 +9,13 @@
     "directory": "crates/trustgraph-wasm"
   },
   "homepage": "https://trustgraph.net",
-  "keywords": ["trust", "reputation", "did", "verifiable-credentials", "wasm"],
+  "keywords": [
+    "trust",
+    "reputation",
+    "did",
+    "verifiable-credentials",
+    "wasm"
+  ],
   "type": "module",
   "types": "./trustgraph.d.ts",
   "exports": {
@@ -20,6 +26,13 @@
     },
     "./trustgraph_wasm_bg.wasm": "./web/trustgraph_wasm_bg.wasm"
   },
-  "files": ["web/", "node/", "trustgraph.d.ts"],
-  "sideEffects": false
+  "files": [
+    "web/",
+    "node/",
+    "trustgraph.d.ts"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">= 22"
+  }
 }

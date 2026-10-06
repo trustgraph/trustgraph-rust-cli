@@ -1,0 +1,48 @@
+{
+  "name": "@trustgraph/trustgraph",
+  "version": "0.1.0",
+  "description": "Trust Graph for Node.js: native bindings to trustgraph-core (napi-rs)",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trustgraph/trustgraph-rust-cli.git",
+    "directory": "crates/trustgraph-node"
+  },
+  "homepage": "https://trustgraph.net",
+  "keywords": [
+    "trust",
+    "reputation",
+    "did",
+    "verifiable-credentials",
+    "napi-rs"
+  ],
+  "main": "index.js",
+  "types": "trustgraph.d.ts",
+  "files": [
+    "index.js",
+    "trustgraph.d.ts"
+  ],
+  "engines": {
+    "node": ">= 18"
+  },
+  "napi": {
+    "binaryName": "trustgraph",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-unknown-linux-musl",
+      "aarch64-unknown-linux-musl",
+      "x86_64-pc-windows-msvc",
+      "aarch64-pc-windows-msvc"
+    ]
+  },
+  "scripts": {
+    "build": "napi build --platform --release && node -e \"require('fs').copyFileSync('../../bindings/trustgraph.d.ts', 'trustgraph.d.ts')\"",
+    "test": "node ../../tests/js/smoke.mjs index.js"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0"
+  }
+}

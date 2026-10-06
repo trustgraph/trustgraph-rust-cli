@@ -21,19 +21,11 @@ const DID_KEY_PREFIX: &str = "did:key:";
 pub struct Keypair(SigningKey);
 
 impl Keypair {
-    /// Generates a new key pair using the operating system's secure random
-    /// number generator.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`Error::Random`] if the OS cannot provide randomness.
-    pub fn generate() -> Result<Self> {
-        let mut seed = [0u8; 32];
-        getrandom::fill(&mut seed).map_err(|e| Error::Random(e.to_string()))?;
-        Ok(Self::from_seed(&seed))
-    }
-
     /// Builds a key pair from a 32-byte Ed25519 seed.
+    ///
+    /// The core does no I/O, so it never generates randomness itself. Callers
+    /// supply a seed from a secure source: the OS (`getrandom`) in the CLI and
+    /// native module, `crypto.getRandomValues` in JavaScript.
     #[must_use]
     pub fn from_seed(seed: &[u8; 32]) -> Self {
         Self(SigningKey::from_bytes(seed))
@@ -234,9 +226,9 @@ mod tests {
     }
 
     #[test]
-    fn generated_keys_are_unique_and_round_trip() {
-        let a = Keypair::generate().unwrap();
-        let b = Keypair::generate().unwrap();
+    fn different_seeds_give_different_keys_that_round_trip() {
+        let a = Keypair::from_seed(&[1; 32]);
+        let b = Keypair::from_seed(&[2; 32]);
         assert_ne!(a.did(), b.did());
         let restored = Keypair::from_secret_multibase(&a.to_secret_multibase()).unwrap();
         assert_eq!(restored.did(), a.did());

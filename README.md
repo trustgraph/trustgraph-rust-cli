@@ -1,11 +1,12 @@
-# ŦRUSŦ GRΔPH CLI
+# ŦRUSŦ GRΔPH
 
 [![CI](https://github.com/trustgraph/trustgraph-rust-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/trustgraph/trustgraph-rust-cli/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-`trust` is the command line interface and Rust library for
-[Trust Graph](https://trustgraph.net), an open protocol for sourcing and
-rendering trust relationships.
+The reference implementation of [Trust Graph](https://trustgraph.net), an open
+protocol for sourcing and rendering trust relationships: one pure Rust core,
+shipped as a command line tool (`trust`), a WebAssembly package and a native
+Node.js module.
 
 - **Trust Atoms.** Every rating, vouch or review is one small statement:
   *source* trusts *target*, about *content*, this much (`-1` to `1`).
@@ -21,19 +22,26 @@ rendering trust relationships.
 - **Unix-friendly.** JSON in, JSON out, one item per line. Commands pipe into
   each other and into `jq`.
 - **Offline.** Nothing needs a server or a network connection.
+- **Runs everywhere.** The same core runs on the command line, in browsers,
+  Cloudflare Workers, Deno, Node, and inside reactive database queries such as
+  Convex's. See [architecture](doc/architecture.md).
 
 > Status: early but solid. The data formats may still change before 1.0. See the
 > [roadmap](doc/plan/README.md).
 
 ## Install
 
-Requires [Rust](https://rustup.rs) 1.85 or newer.
+The CLI needs [Rust](https://rustup.rs) 1.85 or newer:
 
 ```sh
-cargo install --git https://github.com/trustgraph/trustgraph-rust-cli trust-cli
+cargo install --git https://github.com/trustgraph/trustgraph-rust-cli trustgraph-cli
 ```
 
-Or from a checkout: `cargo install --path crates/trust-cli`.
+Or from a checkout: `cargo install --path crates/trustgraph-cli`.
+
+The JavaScript packages, `@trustgraph/trustgraph-wasm` (WebAssembly) and
+`@trustgraph/trustgraph` (native), are not on npm yet. To build them locally, see
+[architecture](doc/architecture.md#building).
 
 ## Quick start
 
@@ -112,22 +120,24 @@ multiplies by `--decay` (default 0.5). A target's score is the agent's own
 rating if there is one. Otherwise it is the average of the ratings by agents
 the agent can reach, weighted by how much the agent trusts each of them.
 Distrust is shown but never passed along. With `--topic`, only trust about
-that topic is followed. Details are in [`graph.rs`](crates/trustgraph/src/graph.rs).
+that topic is followed. Details are in [`graph.rs`](crates/trustgraph-core/src/graph.rs).
 
 ## Library
 
-The protocol lives in the [`trustgraph`](crates/trustgraph) crate, which has no
-CLI dependencies so other components can embed it:
+### Rust
+
+The protocol lives in [`trustgraph-core`](crates/trustgraph-core). It does no
+I/O at all: you pass in data, seeds and timestamps, and get data back.
 
 ```rust
-use trustgraph::{credential, Keypair, LensOptions, TrustAtom, TrustGraph};
+use trustgraph_core::{credential, Keypair, LensOptions, TrustAtom, TrustGraph};
 
-fn main() -> Result<(), trustgraph::Error> {
-    let alice = Keypair::generate()?;
+fn main() -> Result<(), trustgraph_core::Error> {
+    let alice = Keypair::from_seed(&[7; 32]); // use 32 random bytes in practice
     let atom = TrustAtom::new(alice.did().to_string(), "https://sushi.example")
         .with_content("sushi")
         .with_value("0.9".parse()?);
-    let signed = credential::sign_atom(&atom, &alice, jiff::Timestamp::now())?;
+    let signed = credential::sign_atom(&atom, &alice, "2026-01-01T00:00:00Z".parse().unwrap())?;
     assert_eq!(credential::verify_atom(&signed)?, atom);
 
     let graph: TrustGraph = [atom].iter().collect();
@@ -137,19 +147,43 @@ fn main() -> Result<(), trustgraph::Error> {
 }
 ```
 
+### JavaScript and TypeScript
+
+Both npm packages have the same API ([types](bindings/trustgraph.d.ts)):
+
+```ts
+import * as tg from "@trustgraph/trustgraph-wasm"; // or "@trustgraph/trustgraph" (native)
+
+const me = tg.keypairFromSeed(crypto.getRandomValues(new Uint8Array(32)));
+const credential = tg.signAtom(
+  { source: me.did, target: "https://sushi.example", content: "sushi", value: 0.9 },
+  me.secretKeyMultibase,
+  new Date().toISOString(),
+);
+tg.verify(credential); // { valid: true, id: "Qm…", issuer: "did:key:…", atom: {…} }
+tg.lens([credential /* , …everyone else's atoms */], me.did, { topic: "sushi" });
+```
+
 ## Development
 
 ```sh
-cargo test --workspace          # unit, property, end-to-end, and doc tests
+cargo test --workspace                    # unit, property, end-to-end and doc tests
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
+scripts/check-core-purity.sh              # the core must stay free of I/O
+scripts/build-wasm-package.sh             # WebAssembly package → target/npm/trustgraph-wasm
+(cd crates/trustgraph-node && npm ci && npm run build && npm test)  # native addon
 ```
 
 | Path | Contents |
 |---|---|
-| `crates/trustgraph/` | Protocol library: atoms, values, IDs, keys, credentials, Holochain tags, graph, store |
-| `crates/trust-cli/` | The `trust` binary |
-| `doc/plan/` | Roadmap |
+| `crates/trustgraph-core/` | The protocol: atoms, values, IDs, keys, credentials, Holochain tags, lens, and the shared `api`. No I/O |
+| `crates/trustgraph-cli/` | The `trust` binary: files, stdin/stdout, keystore, local store, OS randomness |
+| `crates/trustgraph-wasm/` | `@trustgraph/trustgraph-wasm` (wasm-bindgen) |
+| `crates/trustgraph-node/` | `@trustgraph/trustgraph` (napi-rs) |
+| `bindings/` | TypeScript types shared by both npm packages |
+| `tests/js/` | One smoke test run against every JavaScript build, plus a benchmark |
+| `doc/` | [Architecture](doc/architecture.md) and [roadmap](doc/plan/README.md) |
 
 The signing code is checked against the W3C `eddsa-jcs-2022` test vectors, and
 the Holochain encoding against `trustgraph-holochain`'s own test cases.

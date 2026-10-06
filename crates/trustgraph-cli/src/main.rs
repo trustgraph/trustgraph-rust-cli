@@ -4,6 +4,8 @@ mod cli;
 mod commands;
 mod home;
 mod io;
+mod random;
+mod store;
 
 use std::process::ExitCode;
 

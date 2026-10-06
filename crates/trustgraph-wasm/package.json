@@ -1,0 +1,25 @@
+{
+  "name": "@trustgraph/trustgraph-wasm",
+  "version": "0.1.0",
+  "description": "Trust Graph in WebAssembly: runs in browsers, Cloudflare Workers, Deno, Node and Convex queries",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trustgraph/trustgraph-rust-cli.git",
+    "directory": "crates/trustgraph-wasm"
+  },
+  "homepage": "https://trustgraph.net",
+  "keywords": ["trust", "reputation", "did", "verifiable-credentials", "wasm"],
+  "type": "module",
+  "types": "./trustgraph.d.ts",
+  "exports": {
+    ".": {
+      "types": "./trustgraph.d.ts",
+      "node": "./node/trustgraph_wasm.cjs",
+      "default": "./web/trustgraph_wasm.js"
+    },
+    "./trustgraph_wasm_bg.wasm": "./web/trustgraph_wasm_bg.wasm"
+  },
+  "files": ["web/", "node/", "trustgraph.d.ts"],
+  "sideEffects": false
+}

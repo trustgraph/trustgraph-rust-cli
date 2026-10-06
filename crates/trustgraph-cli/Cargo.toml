@@ -1,5 +1,5 @@
 [package]
-name = "trust-cli"
+name = "trustgraph-cli"
 description = "`trust`: the Trust Graph command line interface"
 readme = "../../README.md"
 keywords = ["trust", "reputation", "did", "cli", "trustgraph"]
@@ -18,13 +18,14 @@ name = "trust"
 path = "src/main.rs"
 
 [dependencies]
-trustgraph.workspace = true
+trustgraph-core.workspace = true
 
 anyhow.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 directories.workspace = true
-jiff.workspace = true
+getrandom.workspace = true
+jiff = { workspace = true, features = ["std"] }
 serde.workspace = true
 serde_json.workspace = true
 

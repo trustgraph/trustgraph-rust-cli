@@ -1,6 +1,6 @@
 [package]
-name = "trustgraph"
-description = "Trust Graph protocol: Trust Atoms, signed trust claims, and agent-centric trust graphs"
+name = "trustgraph-core"
+description = "Trust Graph protocol core: Trust Atoms, signed trust claims and agent-centric trust graphs, with no I/O"
 readme = "README.md"
 keywords = ["trust", "reputation", "did", "verifiable-credentials", "holochain"]
 categories = ["cryptography", "data-structures"]
@@ -16,7 +16,6 @@ publish = false
 [dependencies]
 bs58.workspace = true
 ed25519-dalek.workspace = true
-getrandom.workspace = true
 jiff.workspace = true
 rust_decimal.workspace = true
 serde.workspace = true

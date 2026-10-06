@@ -14,13 +14,13 @@ use crate::{ContentId, Error, Result, Value, canonical};
 /// as in the [Trust Graph protocol](https://github.com/trustgraph/trustgraph).
 ///
 /// ```
-/// use trustgraph::{TrustAtom, Value};
+/// use trustgraph_core::{TrustAtom, Value};
 ///
 /// let atom = TrustAtom::new("did:key:z6MkAlice", "https://ipfs.io")
 ///     .with_content("content addressable graph infrastructure")
 ///     .with_value("0.99".parse::<Value>()?);
 /// atom.validate()?;
-/// # Ok::<(), trustgraph::Error>(())
+/// # Ok::<(), trustgraph_core::Error>(())
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

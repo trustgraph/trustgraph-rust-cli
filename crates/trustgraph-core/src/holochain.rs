@@ -158,18 +158,11 @@ impl LinkTag {
     }
 }
 
-/// Generates a random bucket of nine digits, as the reference implementation does.
-///
-/// # Errors
-///
-/// Returns [`Error::Random`] if the OS cannot provide randomness.
-pub fn random_bucket() -> Result<String> {
-    let mut bytes = [0u8; BUCKET_DIGITS];
-    getrandom::fill(&mut bytes).map_err(|e| Error::Random(e.to_string()))?;
-    Ok(bucket_from_bytes(&bytes))
-}
-
-fn bucket_from_bytes(bytes: &[u8]) -> String {
+/// Turns nine random bytes into a bucket of nine digits, exactly as the
+/// reference implementation does. The caller supplies the randomness: the
+/// core does no I/O.
+#[must_use]
+pub fn bucket_from_bytes(bytes: &[u8; BUCKET_DIGITS]) -> String {
     bytes.iter().map(|b| char::from(b'0' + b % 10)).collect()
 }
 
@@ -278,8 +271,6 @@ mod tests {
     #[test]
     fn bucket_digits_match_reference_implementation() {
         assert_eq!(bucket_from_bytes(&[9, 10, 11, 12, 13, 14, 15, 16, 17]), "901234567");
-        let bucket = random_bucket().unwrap();
-        assert_eq!(bucket.len(), 9);
-        assert!(bucket.bytes().all(|b| b.is_ascii_digit()));
+        assert_eq!(bucket_from_bytes(&[255; 9]), "555555555");
     }
 }

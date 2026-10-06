@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
-use trustgraph::{Did, Keypair, Store};
+use trustgraph_core::{Did, Keypair};
+
+use crate::store::Store;
 
 /// Paths under the home directory.
 #[derive(Debug, Clone)]
@@ -50,7 +52,7 @@ impl Home {
     }
 
     pub fn open_store(&self) -> Result<Store> {
-        Store::open(self.store_path()).with_context(|| format!("opening store {}", self.store_path().display()))
+        Store::open(self.store_path())
     }
 
     fn key_path(&self, name: &str) -> PathBuf {
@@ -132,11 +134,11 @@ mod tests {
         assert_eq!(home.list_keys().unwrap(), []);
         assert!(home.load_key("default").is_err());
 
-        let keypair = Keypair::generate().unwrap();
+        let keypair = Keypair::from_seed(&[1; 32]);
         home.save_key("default", &keypair, false).unwrap();
         assert_eq!(home.load_key("default").unwrap().did(), keypair.did());
-        assert!(home.save_key("default", &Keypair::generate().unwrap(), false).is_err());
-        home.save_key("default", &Keypair::generate().unwrap(), true).unwrap();
+        assert!(home.save_key("default", &Keypair::from_seed(&[2; 32]), false).is_err());
+        home.save_key("default", &Keypair::from_seed(&[2; 32]), true).unwrap();
         assert_ne!(home.load_key("default").unwrap().did(), keypair.did());
 
         #[cfg(unix)]

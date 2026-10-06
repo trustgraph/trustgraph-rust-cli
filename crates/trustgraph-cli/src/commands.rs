@@ -6,12 +6,13 @@ use anyhow::{Context, Result, bail};
 use clap::CommandFactory;
 use jiff::{Timestamp, Unit};
 use serde_json::{Value as Json, json};
-use trustgraph::holochain::{self, Direction, LinkTag};
-use trustgraph::{Keypair, LensOptions, Query, Record, TrustAtom, TrustGraph, credential};
+use trustgraph_core::{Keypair, LensOptions, Query, Record, TrustAtom, TrustGraph, credential};
+use trustgraph_core::{api, holochain};
 
 use crate::cli::{AtomArgs, Cli, Command, ConvertArgs, Format, InputArgs, KeyCommand, LensArgs, QueryArgs, SignArgs};
 use crate::home::Home;
 use crate::io::{Output, read_json};
+use crate::random;
 
 /// Whether the command succeeded. `Failed` means the command ran, but its
 /// answer was "no" (e.g. a signature did not verify).
@@ -58,7 +59,7 @@ fn now() -> Timestamp {
 fn key<W: Write>(home: &Home, cmd: KeyCommand, out: &mut Output<W>) -> Result<Outcome> {
     match cmd {
         KeyCommand::New { name, force } => {
-            let keypair = Keypair::generate()?;
+            let keypair = Keypair::from_seed(&random::bytes()?);
             home.save_key(&name, &keypair, force)?;
             out.json(&json!({ "name": name, "did": keypair.did() }))?;
         }
@@ -117,33 +118,23 @@ fn atom<W: Write>(home: &Home, args: AtomArgs, out: &mut Output<W>) -> Result<Ou
 /// Parses input as atoms, accepting plain atoms or credentials (whose proof
 /// is *not* checked).
 fn atoms_from(input: &InputArgs) -> Result<Vec<TrustAtom>> {
-    read_json(input.input.as_deref())?
-        .into_iter()
-        .enumerate()
-        .map(|(n, json)| parse_atom(json).with_context(|| format!("item {}", n + 1)))
-        .collect()
+    read_items(input)?.into_iter().map(|(n, json)| api::parse_atom(json).with_context(|| format!("item {n}"))).collect()
 }
 
-fn parse_atom(json: Json) -> Result<TrustAtom> {
-    let atom = if json.get("@context").is_some() {
-        credential::from_credential(&json)?
-    } else {
-        serde_json::from_value(json)?
-    };
-    atom.validate()?;
-    Ok(atom)
+/// Reads input items, numbered from 1 for error messages.
+fn read_items(input: &InputArgs) -> Result<Vec<(usize, Json)>> {
+    Ok(read_json(input.input.as_deref())?.into_iter().enumerate().map(|(n, json)| (n + 1, json)).collect())
 }
 
 fn sign<W: Write>(home: &Home, args: &SignArgs, out: &mut Output<W>) -> Result<Outcome> {
     let keypair = home.load_key(&args.key.key)?;
     let created = args.created.unwrap_or_else(now);
-    for (n, json) in read_json(args.input.input.as_deref())?.into_iter().enumerate() {
+    for (n, json) in read_items(&args.input)? {
         if json.get("proof").is_some() {
-            bail!("item {}: already signed", n + 1);
+            bail!("item {n}: already signed");
         }
-        let atom: TrustAtom =
-            serde_json::from_value(json).with_context(|| format!("item {}: not a Trust Atom", n + 1))?;
-        let signed = credential::sign_atom(&atom, &keypair, created).with_context(|| format!("item {}", n + 1))?;
+        let atom: TrustAtom = serde_json::from_value(json).with_context(|| format!("item {n}: not a Trust Atom"))?;
+        let signed = credential::sign_atom(&atom, &keypair, created).with_context(|| format!("item {n}"))?;
         out.json(&signed)?;
     }
     Ok(Outcome::Success)
@@ -151,14 +142,12 @@ fn sign<W: Write>(home: &Home, args: &SignArgs, out: &mut Output<W>) -> Result<O
 
 fn verify<W: Write>(args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
     let mut outcome = Outcome::Success;
-    for json in read_json(args.input.as_deref())? {
-        match credential::verify_atom(&json) {
-            Ok(atom) => out.json(&json!({ "valid": true, "id": atom.id()?, "issuer": atom.source, "atom": atom }))?,
-            Err(err) => {
-                outcome = Outcome::Failed;
-                out.json(&json!({ "valid": false, "error": err.to_string() }))?;
-            }
+    for (_, json) in read_items(args)? {
+        let result = api::verify(&json);
+        if !result.valid {
+            outcome = Outcome::Failed;
         }
+        out.json(&result)?;
     }
     Ok(outcome)
 }
@@ -171,44 +160,28 @@ fn id<W: Write>(args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
 }
 
 fn convert<W: Write>(args: &ConvertArgs, out: &mut Output<W>) -> Result<Outcome> {
-    for atom in atoms_from(&args.input)? {
+    for (n, json) in read_items(&args.input)? {
+        let context = || format!("item {n}");
         match args.to {
-            Format::Atom => out.json(&atom)?,
-            Format::Credential => out.json(&credential::to_credential(&atom)?)?,
-            Format::Canonical => out.line(&atom.canonical_json()?)?,
+            Format::Atom => out.json(&api::parse_atom(json).with_context(context)?)?,
+            Format::Credential => out.json(&api::to_credential(json).with_context(context)?)?,
+            Format::Canonical => out.line(&api::canonical_atom(json).with_context(context)?)?,
             Format::Holochain => {
                 let bucket = match &args.bucket {
                     Some(bucket) => bucket.clone(),
-                    None => holochain::random_bucket()?,
+                    None => holochain::bucket_from_bytes(&random::bytes()?),
                 };
-                let tag = |direction| -> Result<Json> {
-                    let bytes = LinkTag::for_atom(&atom, direction, Some(bucket.clone()), None).encode()?;
-                    Ok(json!({ "tag": String::from_utf8_lossy(&bytes), "hex": to_hex(&bytes) }))
-                };
-                out.json(&json!({
-                    "source": atom.source,
-                    "target": atom.target,
-                    "forward": tag(Direction::Forward)?,
-                    "reverse": tag(Direction::Reverse)?,
-                }))?;
+                out.json(&api::holochain_tags(json, &bucket).with_context(context)?)?;
             }
         }
     }
     Ok(Outcome::Success)
 }
 
-fn to_hex(bytes: &[u8]) -> String {
-    use std::fmt::Write as _;
-    bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut s, b| {
-        let _ = write!(s, "{b:02x}");
-        s
-    })
-}
-
 fn add<W: Write>(home: &Home, args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
     let mut store = home.open_store()?;
-    for (n, json) in read_json(args.input.as_deref())?.into_iter().enumerate() {
-        let record = Record::from_json(json).with_context(|| format!("item {}", n + 1))?;
+    for (n, json) in read_items(args)? {
+        let record = Record::from_json(json).with_context(|| format!("item {n}"))?;
         let (id, signed) = (record.id, record.is_signed());
         let added = store.add(record)?;
         out.json(&json!({ "id": id, "added": added, "signed": signed }))?;

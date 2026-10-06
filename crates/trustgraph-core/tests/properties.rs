@@ -4,9 +4,9 @@
 
 use jiff::Timestamp;
 use proptest::prelude::*;
-use trustgraph::holochain::{Direction, LinkTag};
-use trustgraph::value::Decimal;
-use trustgraph::{Keypair, LensOptions, TrustAtom, TrustGraph, Value, credential};
+use trustgraph_core::holochain::{Direction, LinkTag};
+use trustgraph_core::value::Decimal;
+use trustgraph_core::{Keypair, LensOptions, TrustAtom, TrustGraph, Value, credential};
 
 fn value() -> impl Strategy<Value = Value> {
     (-1_000_000_000i64..=1_000_000_000).prop_map(|n| Value::new(Decimal::new(n, 9)).unwrap())

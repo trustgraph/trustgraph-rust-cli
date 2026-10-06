@@ -15,7 +15,7 @@ env:
 
 jobs:
   lint:
-    name: Format, Clippy & Docs
+    name: Format, Clippy, Docs & Purity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -26,6 +26,8 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked
       - run: cargo doc --workspace --no-deps --locked
+      - name: trustgraph-core does no I/O
+        run: scripts/check-core-purity.sh
 
   test:
     name: Test (${{ matrix.os }})
@@ -48,3 +50,53 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.85
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace --locked
+
+  wasm:
+    name: WebAssembly package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: wasm-bindgen version from Cargo.lock
+        id: wasm-bindgen
+        run: echo "version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: cargo clippy --target wasm32-unknown-unknown -p trustgraph-core -p trustgraph-wasm --locked
+      - run: scripts/build-wasm-package.sh
+      - run: node tests/js/smoke.mjs target/npm/trustgraph-wasm/node/trustgraph_wasm.cjs
+      - run: node tests/js/smoke.mjs target/npm/trustgraph-wasm/web/trustgraph_wasm.js
+      - name: TypeScript types
+        run: npx -y -p typescript@5 tsc --noEmit --strict --lib es2022,dom tests/js/types.ts
+      - name: Benchmark (informational)
+        run: node tests/js/bench.mjs target/npm/trustgraph-wasm/node/trustgraph_wasm.cjs
+
+  node:
+    name: Native Node addon (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: crates/trustgraph-node
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: crates/trustgraph-node/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test

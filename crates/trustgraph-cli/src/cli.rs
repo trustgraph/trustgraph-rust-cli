@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use jiff::Timestamp;
-use trustgraph::Value;
-use trustgraph::value::Decimal;
+use trustgraph_core::Value;
+use trustgraph_core::value::Decimal;
 
 /// trust: sign, share and explore trust relationships.
 ///
@@ -273,7 +273,7 @@ fn parse_value(s: &str) -> Result<Value, String> {
         let (rating, best) = (parse(rating)?, parse(best)?);
         return Value::from_scale(rating, Decimal::ZERO, best).map_err(|e| e.to_string());
     }
-    s.parse().map_err(|e: trustgraph::Error| e.to_string())
+    s.parse().map_err(|e: trustgraph_core::Error| e.to_string())
 }
 
 fn parse_decay(s: &str) -> Result<f64, String> {

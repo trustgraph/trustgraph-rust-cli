@@ -150,6 +150,12 @@ impl TrustGraph {
             return Vec::new();
         }
 
+        // Each source's edges, computed once (each round revisits agents).
+        let edges: HashMap<&str, BTreeMap<&str, f64>> =
+            self.ratings.keys().map(|source| (source.as_str(), self.edges(source, topic))).collect();
+        let no_edges = BTreeMap::new();
+        let edges_of = |agent: &str| edges.get(agent).unwrap_or(&no_edges);
+
         // Reach: best weight to each agent using at most depth - 1 hops
         // (bounded Bellman-Ford, maximizing the product of weights).
         let mut reach: BTreeMap<&str, (f64, usize)> = BTreeMap::from([(root, (1.0, 0))]);
@@ -158,7 +164,7 @@ impl TrustGraph {
             let mut next = reach.clone();
             for (&agent, &(weight, _)) in &reach {
                 let factor = if agent == root { 1.0 } else { decay };
-                for (target, value) in self.edges(agent, topic) {
+                for (&target, &value) in edges_of(agent) {
                     if value <= 0.0 || target == root {
                         continue;
                     }
@@ -178,7 +184,7 @@ impl TrustGraph {
         }
 
         // Scores.
-        let direct = self.edges(root, topic);
+        let direct = edges_of(root);
         let mut sums: BTreeMap<&str, (f64, f64, f64, usize, usize)> = BTreeMap::new(); // (Σw·v, Σw, max w, min hops, raters)
         for (&agent, &(weight, hops)) in &reach {
             if agent == root || weight <= 0.0 {
@@ -188,7 +194,7 @@ impl TrustGraph {
             if voice <= 0.0 {
                 continue;
             }
-            for (target, value) in self.edges(agent, topic) {
+            for (&target, &value) in edges_of(agent) {
                 if target == root || direct.contains_key(target) {
                     continue;
                 }

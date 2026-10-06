@@ -1,0 +1,416 @@
+//! The JSON-shaped API that every wrapper exposes.
+//!
+//! The CLI, the WebAssembly package and the native Node module all call
+//! these functions, so they behave identically everywhere. Inputs and
+//! outputs are plain serde values (JSON objects in JavaScript); field names
+//! are camelCase.
+//!
+//! Like the rest of the core, nothing here does I/O: no files, network,
+//! clock or randomness. Callers pass in seeds and timestamps, and keep
+//! records wherever they like. Every function is deterministic, which is
+//! what lets the WebAssembly build run inside reactive database queries
+//! (such as Convex queries and mutations).
+
+use serde::{Deserialize, Serialize};
+use serde_json::Value as Json;
+
+use crate::holochain::{BUCKET_DIGITS, Direction, LinkTag};
+use crate::{Error, Keypair, LensEntry, LensOptions, Result, TrustAtom, TrustGraph, credential};
+
+/// The core's version.
+#[must_use]
+pub fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// An identity, as returned by [`keypair_from_seed`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyInfo {
+    /// The `did:key` DID.
+    pub did: String,
+    /// The public key (`z6Mk…`).
+    pub public_key_multibase: String,
+    /// The secret key (`z3u2…`). Keep it safe.
+    pub secret_key_multibase: String,
+}
+
+/// Derives an identity from a 32-byte seed. Callers supply the randomness
+/// (e.g. `crypto.getRandomValues(new Uint8Array(32))`).
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidInput`] if the seed is not 32 bytes.
+pub fn keypair_from_seed(seed: &[u8]) -> Result<KeyInfo> {
+    let seed: &[u8; 32] =
+        seed.try_into().map_err(|_| Error::InvalidInput(format!("seed must be 32 bytes, got {}", seed.len())))?;
+    let keypair = Keypair::from_seed(seed);
+    Ok(KeyInfo {
+        did: keypair.did().to_string(),
+        public_key_multibase: keypair.public().to_multibase(),
+        secret_key_multibase: keypair.to_secret_multibase(),
+    })
+}
+
+/// Parses an atom, or extracts it from a credential (without checking the
+/// proof), and validates it.
+///
+/// # Errors
+///
+/// Fails if the input is neither a valid atom nor a Trust Atom credential.
+pub fn parse_atom(input: Json) -> Result<TrustAtom> {
+    let atom = if input.get("@context").is_some() {
+        credential::from_credential(&input)?
+    } else {
+        serde_json::from_value(input)?
+    };
+    atom.validate()?;
+    Ok(atom)
+}
+
+/// The content ID (`Qm…`) of an atom or credential's atom.
+///
+/// # Errors
+///
+/// See [`parse_atom`].
+pub fn atom_id(input: Json) -> Result<String> {
+    Ok(parse_atom(input)?.id()?.to_string())
+}
+
+/// The canonical JSON (RFC 8785) of an atom: exactly the bytes that are hashed.
+///
+/// # Errors
+///
+/// See [`parse_atom`].
+pub fn canonical_atom(input: Json) -> Result<String> {
+    parse_atom(input)?.canonical_json()
+}
+
+/// Converts an atom into an unsigned Verifiable Credential.
+///
+/// # Errors
+///
+/// See [`parse_atom`].
+pub fn to_credential(input: Json) -> Result<Json> {
+    credential::to_credential(&parse_atom(input)?)
+}
+
+/// Signs an atom with a secret key, at time `created` (RFC 3339).
+///
+/// # Errors
+///
+/// Fails if the atom, key or time is invalid, or the atom's source is not the
+/// key's DID.
+pub fn sign_atom(atom: Json, secret_key_multibase: &str, created: &str) -> Result<Json> {
+    if atom.get("proof").is_some() {
+        return Err(Error::InvalidInput("already signed".into()));
+    }
+    let atom = parse_atom(atom)?;
+    let keypair = Keypair::from_secret_multibase(secret_key_multibase)?;
+    let created = created.parse().map_err(|_| Error::InvalidInput(format!("`{created}` is not an RFC 3339 time")))?;
+    credential::sign_atom(&atom, &keypair, created)
+}
+
+/// The result of [`verify`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Verification {
+    /// Whether the credential verified.
+    pub valid: bool,
+    /// The atom's content ID, if valid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// The issuer's DID, if valid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issuer: Option<String>,
+    /// The atom, if valid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub atom: Option<TrustAtom>,
+    /// Why verification failed, if it did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Verifies a signed Trust Atom credential. Never fails: an invalid
+/// credential is reported in the result.
+#[must_use]
+pub fn verify(credential: &Json) -> Verification {
+    match credential::verify_atom(credential).and_then(|atom| Ok((atom.id()?, atom))) {
+        Ok((id, atom)) => Verification {
+            valid: true,
+            id: Some(id.to_string()),
+            issuer: Some(atom.source.clone()),
+            atom: Some(atom),
+            error: None,
+        },
+        Err(err) => Verification { valid: false, id: None, issuer: None, atom: None, error: Some(err.to_string()) },
+    }
+}
+
+/// Options for [`lens`] and [`rollup`]. Missing fields take their defaults.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct LensRequest {
+    /// Maximum hops, `1..=10` (default 3).
+    pub depth: usize,
+    /// Weight of each hop after the first, `0..=1` (default 0.5).
+    pub decay: f64,
+    /// Only follow and score trust about this topic.
+    pub topic: Option<String>,
+    /// Ignore unsigned atoms.
+    pub signed_only: bool,
+    /// Return at most this many entries.
+    pub limit: Option<usize>,
+}
+
+impl Default for LensRequest {
+    fn default() -> Self {
+        let defaults = LensOptions::default();
+        Self { depth: defaults.depth, decay: defaults.decay, topic: None, signed_only: false, limit: None }
+    }
+}
+
+impl LensRequest {
+    /// Validates the request and converts it to [`LensOptions`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidInput`] if `depth` or `decay` is out of range.
+    pub fn options(&self) -> Result<LensOptions> {
+        if !(1..=10).contains(&self.depth) {
+            return Err(Error::InvalidInput(format!("depth must be 1..=10, got {}", self.depth)));
+        }
+        if !(0.0..=1.0).contains(&self.decay) {
+            return Err(Error::InvalidInput(format!("decay must be 0..=1, got {}", self.decay)));
+        }
+        Ok(LensOptions { depth: self.depth, decay: self.decay, topic: self.topic.clone() })
+    }
+}
+
+/// Builds a graph from `items` (atoms and/or signed credentials).
+/// Credentials are verified; with `signed_only`, plain atoms are skipped.
+///
+/// For speed in hot paths (such as reactive queries), verify credentials
+/// once when they are written, store the atoms, and pass plain atoms here.
+fn graph(items: Vec<Json>, signed_only: bool) -> Result<TrustGraph> {
+    let mut graph = TrustGraph::new();
+    for (n, item) in items.into_iter().enumerate() {
+        let item_error = |e: Error| Error::InvalidInput(format!("item {}: {e}", n + 1));
+        // Unlike `Record::from_json`, skip computing content IDs: scoring does not need them.
+        if item.get("proof").is_some() {
+            graph.insert(&credential::verify_atom(&item).map_err(item_error)?);
+        } else if item.get("@context").is_some() {
+            return Err(item_error(Error::InvalidCredential("credential is not signed".into())));
+        } else if !signed_only {
+            let atom: TrustAtom = serde_json::from_value(item).map_err(|e| item_error(e.into()))?;
+            atom.validate().map_err(item_error)?;
+            graph.insert(&atom);
+        }
+    }
+    Ok(graph)
+}
+
+/// The Agent Lens: everything `root` can see in `items`, best first.
+///
+/// # Errors
+///
+/// Fails if the request is out of range or an item is invalid.
+pub fn lens(items: Vec<Json>, root: &str, request: &LensRequest) -> Result<Vec<LensEntry>> {
+    let options = request.options()?;
+    let mut entries = graph(items, request.signed_only)?.lens(root, &options);
+    if let Some(limit) = request.limit {
+        entries.truncate(limit);
+    }
+    Ok(entries)
+}
+
+/// Rollup atoms (unsigned) for `root`'s lens, timestamped `at` (RFC 3339).
+/// Sign them with [`sign_atom`] to publish them.
+///
+/// # Errors
+///
+/// Fails like [`lens`], or if `at` is not an RFC 3339 time.
+pub fn rollup(items: Vec<Json>, root: &str, request: &LensRequest, at: &str) -> Result<Vec<TrustAtom>> {
+    let at = at.parse().map_err(|_| Error::InvalidInput(format!("`{at}` is not an RFC 3339 time")))?;
+    let entries = lens(items, root, request)?;
+    TrustGraph::rollup(root, &entries, &request.options()?, at)
+}
+
+/// One encoded Holochain link tag.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EncodedTag {
+    /// The tag as text (with NUL separators).
+    pub tag: String,
+    /// The tag's bytes, in lowercase hex.
+    pub hex: String,
+}
+
+/// The forward and reverse Holochain link tags for an atom.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HolochainTags {
+    /// The atom's source (the forward link's base).
+    pub source: String,
+    /// The atom's target (the forward link's target).
+    pub target: String,
+    /// The `source → target` link tag.
+    pub forward: EncodedTag,
+    /// The `target → source` link tag.
+    pub reverse: EncodedTag,
+}
+
+/// Encodes an atom as `trustgraph-holochain` link tags, with the given
+/// nine-digit bucket (see [`crate::holochain::bucket_from_bytes`]).
+///
+/// # Errors
+///
+/// Fails if the atom is invalid or does not fit in a link tag.
+pub fn holochain_tags(atom: Json, bucket: &str) -> Result<HolochainTags> {
+    if bucket.len() != BUCKET_DIGITS {
+        return Err(Error::InvalidInput(format!("bucket must be {BUCKET_DIGITS} digits")));
+    }
+    let atom = parse_atom(atom)?;
+    let encode = |direction| -> Result<EncodedTag> {
+        let bytes = LinkTag::for_atom(&atom, direction, Some(bucket.to_owned()), None).encode()?;
+        Ok(EncodedTag { tag: String::from_utf8_lossy(&bytes).into_owned(), hex: to_hex(&bytes) })
+    };
+    Ok(HolochainTags {
+        forward: encode(Direction::Forward)?,
+        reverse: encode(Direction::Reverse)?,
+        source: atom.source,
+        target: atom.target,
+    })
+}
+
+fn to_hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    bytes.iter().flat_map(|b| [DIGITS[usize::from(b >> 4)], DIGITS[usize::from(b & 0xf)]]).map(char::from).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn alice() -> KeyInfo {
+        keypair_from_seed(&[1; 32]).unwrap()
+    }
+
+    fn signed(target: &str, value: &str) -> Json {
+        let atom = json!({ "source": alice().did, "target": target, "content": "sushi", "value": value });
+        sign_atom(atom, &alice().secret_key_multibase, "2024-01-01T00:00:00Z").unwrap()
+    }
+
+    #[test]
+    fn keypair_from_seed_is_deterministic_and_checks_length() {
+        assert_eq!(alice(), keypair_from_seed(&[1; 32]).unwrap());
+        assert!(alice().did.starts_with("did:key:z6Mk"));
+        assert_eq!(format!("did:key:{}", alice().public_key_multibase), alice().did);
+        assert!(keypair_from_seed(&[1; 31]).is_err());
+        let json = serde_json::to_value(alice()).unwrap();
+        assert!(json.get("secretKeyMultibase").is_some(), "camelCase for JavaScript");
+    }
+
+    #[test]
+    fn sign_then_verify() {
+        let credential = signed("https://sushi.example", "0.9");
+        let result = verify(&credential);
+        assert!(result.valid);
+        assert_eq!(result.issuer.as_deref(), Some(alice().did.as_str()));
+        assert_eq!(result.id, Some(atom_id(credential.clone()).unwrap()));
+
+        let mut forged = credential;
+        forged["credentialSubject"]["value"] = json!("-1");
+        let result = verify(&forged);
+        assert!(!result.valid);
+        assert!(result.error.unwrap().contains("signature"));
+        assert_eq!(
+            serde_json::to_value(verify(&json!({}))).unwrap().as_object().unwrap().keys().collect::<Vec<_>>(),
+            ["valid", "error"]
+        );
+    }
+
+    #[test]
+    fn sign_rejects_bad_input() {
+        let atom = json!({ "source": alice().did, "target": "x" });
+        let key = alice().secret_key_multibase;
+        assert!(sign_atom(atom.clone(), &key, "yesterday").is_err());
+        assert!(sign_atom(atom.clone(), "zNotAKey", "2024-01-01T00:00:00Z").is_err());
+        let signed = sign_atom(atom, &key, "2024-01-01T00:00:00Z").unwrap();
+        assert!(sign_atom(signed, &key, "2024-01-01T00:00:00Z").is_err());
+        assert!(sign_atom(json!({ "source": "someone-else", "target": "x" }), &key, "2024-01-01T00:00:00Z").is_err());
+    }
+
+    #[test]
+    fn ids_and_canonical_json_agree_across_forms() {
+        let atom = json!({ "target": "b", "source": "a", "value": 1 });
+        assert_eq!(canonical_atom(atom.clone()).unwrap(), r#"{"source":"a","target":"b","value":"1"}"#);
+        let credential = to_credential(atom.clone()).unwrap();
+        assert_eq!(atom_id(credential).unwrap(), atom_id(atom).unwrap());
+    }
+
+    #[test]
+    fn lens_over_mixed_items() {
+        let bob = keypair_from_seed(&[2; 32]).unwrap();
+        let bob_rates = sign_atom(
+            json!({ "source": bob.did, "target": "https://sushi.example", "content": "sushi", "value": "0.8" }),
+            &bob.secret_key_multibase,
+            "2024-01-01T00:00:00Z",
+        )
+        .unwrap();
+        let items = vec![
+            signed(&bob.did, "1"),
+            bob_rates,
+            json!({ "source": bob.did, "target": "https://unsigned.example", "content": "sushi", "value": "1" }),
+        ];
+        let all = lens(items.clone(), &alice().did, &LensRequest::default()).unwrap();
+        assert_eq!(all.len(), 3);
+        let signed_only = LensRequest { signed_only: true, ..LensRequest::default() };
+        let entries = lens(items.clone(), &alice().did, &signed_only).unwrap();
+        assert_eq!(
+            entries.iter().map(|e| e.target.as_str()).collect::<Vec<_>>(),
+            [bob.did.as_str(), "https://sushi.example"]
+        );
+        let limited = LensRequest { limit: Some(1), ..LensRequest::default() };
+        assert_eq!(lens(items.clone(), &alice().did, &limited).unwrap().len(), 1);
+
+        let rollups = rollup(items, &alice().did, &signed_only, "2024-02-01T00:00:00Z").unwrap();
+        assert_eq!(rollups.len(), 2);
+        assert!(rollups.iter().all(|a| a.source == alice().did && a.extra["rollup"] == "agent-lens"));
+    }
+
+    #[test]
+    fn lens_rejects_bad_requests_and_items() {
+        let bad_depth = LensRequest { depth: 0, ..LensRequest::default() };
+        assert!(lens(vec![], "a", &bad_depth).is_err());
+        let bad_decay = LensRequest { decay: 1.5, ..LensRequest::default() };
+        assert!(lens(vec![], "a", &bad_decay).is_err());
+        let err = lens(vec![json!({"source": "a"})], "a", &LensRequest::default()).unwrap_err();
+        assert!(err.to_string().contains("item 1"), "{err}");
+        let request: LensRequest = serde_json::from_str(r#"{"topic":"sushi","signedOnly":true}"#).unwrap();
+        assert_eq!(request.depth, 3);
+        assert!(request.signed_only);
+    }
+
+    #[test]
+    fn holochain_tags_match_reference_format() {
+        let tags = holochain_tags(json!({ "source": "a", "target": "b", "content": "sushi", "value": 1 }), "892412523")
+            .unwrap();
+        assert_eq!(tags.forward.tag, "Ŧ→sushi\u{0}.999999999\u{0}892412523\u{0}");
+        assert_eq!(tags.reverse.tag, "Ŧ↩sushi\u{0}.999999999\u{0}892412523\u{0}");
+        assert_eq!(&tags.forward.hex[..10], "c5a6e28692");
+        assert!(holochain_tags(json!({ "source": "a", "target": "b" }), "12").is_err());
+    }
+
+    #[test]
+    fn everything_is_deterministic() {
+        let items = vec![signed("https://a.example", "0.5"), signed("https://b.example", "-0.5")];
+        let first =
+            serde_json::to_string(&lens(items.clone(), &alice().did, &LensRequest::default()).unwrap()).unwrap();
+        for _ in 0..5 {
+            let again =
+                serde_json::to_string(&lens(items.clone(), &alice().did, &LensRequest::default()).unwrap()).unwrap();
+            assert_eq!(again, first);
+        }
+        assert_eq!(signed("x", "1"), signed("x", "1"), "Ed25519 signatures are deterministic");
+    }
+}

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/trustgraph", "crates/trust-cli"]
+members = ["crates/trustgraph-core", "crates/trustgraph-cli", "crates/trustgraph-wasm", "crates/trustgraph-node"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,7 +12,7 @@ homepage = "https://trustgraph.net"
 authors = ["Trust Graph contributors"]
 
 [workspace.dependencies]
-trustgraph = { path = "crates/trustgraph", version = "0.1.0" }
+trustgraph-core = { path = "crates/trustgraph-core", version = "0.1.0" }
 
 anyhow = "1.0"
 bs58 = "0.5"
@@ -21,12 +21,17 @@ clap_complete = "4.6"
 directories = "6.0"
 ed25519-dalek = "3.0"
 getrandom = "0.4"
-jiff = { version = "0.2", features = ["serde"] }
+jiff = { version = "0.2", default-features = false, features = ["std", "serde"] }
 rust_decimal = "1.43"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 serde_json_canonicalizer = "0.3"
 sha2 = "0.11"
+serde-wasm-bindgen = "0.6"
+wasm-bindgen = "0.2"
+napi = { version = "3", default-features = false, features = ["napi6", "serde-json"] }
+napi-derive = "3"
+napi-build = "2"
 thiserror = "2.0"
 
 assert_cmd = "2.2"
@@ -50,3 +55,10 @@ module_name_repetitions = "allow"
 lto = "thin"
 codegen-units = 1
 strip = true
+
+# Small, fast-loading WebAssembly: `cargo build --profile wasm --target wasm32-unknown-unknown -p trustgraph-wasm`
+[profile.wasm]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+panic = "abort"

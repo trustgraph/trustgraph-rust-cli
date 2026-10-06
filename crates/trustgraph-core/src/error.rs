@@ -1,7 +1,7 @@
 //! Error type shared by the whole crate.
 
 /// Everything that can go wrong while building, encoding, signing or
-/// verifying Trust Graph data.
+/// verifying Trust Graph data. There are no I/O errors: the core does no I/O.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -34,18 +34,14 @@ pub enum Error {
     #[error("invalid Holochain link tag: {0}")]
     InvalidLinkTag(String),
 
-    /// The operating system's random number generator failed.
-    #[error("random number generator failed: {0}")]
-    Random(String),
+    /// An argument to an API call was out of range or malformed.
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
 
     /// JSON (de)serialization failed.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-
-    /// Reading or writing a file failed.
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
 }
 
-/// Shorthand for `Result<T, trustgraph::Error>`.
+/// Shorthand for `Result<T, trustgraph_core::Error>`.
 pub type Result<T, E = Error> = std::result::Result<T, E>;

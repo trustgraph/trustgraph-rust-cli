@@ -1,35 +1,37 @@
-# Trust Graph CLI: Roadmap
+# Trust Graph: Roadmap
 
 ## TL;DR
 
 **Where we are:** [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11) turned this repo from a "hello world" scaffold into
 `trust`, a working CLI and Rust library for the Trust Graph protocol. You can
 create identities, sign trust ratings as W3C Verifiable Credentials, store
-them, and explore them through your **Agent Lens**. It has 96 tests, CI on
-three operating systems, and is checked against the W3C spec's test vectors
-and `trustgraph-holochain`'s test cases.
+them, and explore them through your **Agent Lens**. [PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15) then split it into
+**one pure Rust core with three thin wrappers**: the `trust` CLI, a
+WebAssembly package (browsers, Workers, Convex queries) and a native Node
+module (Node, Convex Node actions). See [architecture](../architecture.md).
 
-**What's missing:** atoms only live on your own machine. The next big step is
-**sharing**: getting atoms from me to you, and back.
+**What's missing:** nothing is published yet, and atoms only live where you
+put them. The next big steps are **publishing the packages** so CoreNexus and
+others can use them, then **sharing** atoms between people.
 
 **Next steps, in order:**
 
 1. **Lock the data format.** Publish the JSON-LD context and JSON Schema at
    `trustgraph.net`, and freeze the atom and credential shapes as v1.
-2. **Share over HTTPS.** `trust publish` writes a signed feed you can host
+2. **Release and publish.** Prebuilt `trust` binaries (cargo-dist, Homebrew),
+   the npm packages (`@trustgraph/trustgraph` per-platform via napi-rs, and
+   `@trustgraph/trustgraph-wasm`), and the crates. Prove the WebAssembly
+   build inside a real Convex query.
+3. **Share over HTTPS.** `trust publish` writes a signed feed you can host
    anywhere (GitHub Pages, any static host). `trust follow <url>` and
    `trust pull` fetch other people's feeds. This gives a working network with
    no servers to run.
-3. **Holochain.** Read and write atoms on a live conductor using the existing
+4. **Holochain.** Read and write atoms on a live conductor using the existing
    `trustgraph-holochain` zome. The link-tag codec is already done.
-4. **Release.** Prebuilt binaries for macOS, Linux and Windows, Homebrew, and
-   `cargo install trust-cli`. Publish the `trustgraph` crate.
 5. **Friendlier UX.** Interactive `trust rate`, readable table output, and
    `trust lens --format dot|mermaid` to draw your graph.
-6. **Embed everywhere.** A WASM build of the library for web apps, so the
-   trustgraph.net, browser extensions and others all use the same code.
-7. **Harden.** Revoking and updating ratings, key rotation, Sybil-resistance
-   research for the lens, and performance at 100k+ atoms.
+6. **Harden.** Revoking and updating ratings, key rotation, Sybil-resistance
+   research for the lens, and performance beyond 100k atoms.
 
 **Decisions I need from you** (details in [Open decisions](#open-decisions)):
 
@@ -37,8 +39,12 @@ and `trustgraph-holochain`'s test cases.
   and the protocol README say `0..1`. Confirm, and I'll update those docs.
 - **Domain for schemas:** is `https://trustgraph.net/ns/v1` OK for the
   JSON-LD context?
-- **Crate names:** OK to publish `trustgraph` and `trust-cli` on crates.io?
-  Note that an unrelated AI company is also called "TrustGraph".
+- **Package names:** OK to publish `trustgraph-core` and `trustgraph-cli` on
+  crates.io, and `@trustgraph/trustgraph` and `@trustgraph/trustgraph-wasm`
+  on npm? An unrelated AI company is also called "TrustGraph".
+- **Public or private npm:** Convex installs native packages from npm at
+  deploy time. Public is simplest; private needs a test that Convex can
+  install from a private registry first.
 
 Everything below this line is supporting detail.
 
@@ -63,11 +69,11 @@ Everything below this line is supporting detail.
   describe Agents, the **Agent Lens**, the **Trust Cascade**, and trust
   **rollups**. All of these are now real commands.
 
-## What shipped in [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11)
+## What has shipped
 
 | Area | Status |
 |---|---|
-| Workspace: `trustgraph` library + `trust` binary | ✅ |
+| Workspace: protocol library + `trust` binary ([PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11)) | ✅ |
 | Trust Atoms, validation, canonical JSON (RFC 8785), `Qm…` content IDs | ✅ |
 | Values: exact decimals in `-1..=1`, Holochain-compatible normalization | ✅ |
 | `did:key` Ed25519 identities, keystore (`0600`) | ✅ |
@@ -76,12 +82,20 @@ Everything below this line is supporting detail.
 | Local append-only store, verified on the way in | ✅ |
 | Agent Lens / Trust Cascade, topic filters, rollups | ✅ |
 | CI (3 OSes, MSRV, clippy pedantic, rustdoc), Dependabot, Apache-2.0 | ✅ |
+| Pure `trustgraph-core` (no I/O, enforced in CI) + shared JSON `api` ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
+| `@trustgraph/trustgraph-wasm`: web and Node builds, 547 KiB ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ built and tested, not published |
+| `@trustgraph/trustgraph`: napi-rs, tested on Linux, macOS, Windows ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ built and tested, not published |
+| Shared TypeScript types; one smoke test across all JS builds ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
+| `lens` on 100k atoms: 0.78 s WebAssembly, 0.48 s native ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 
 ## Design principles
 
-1. **Library first.** All protocol logic lives in `trustgraph`, which has no
-   CLI dependencies. Every other component (web, Holochain, mobile)
-   uses the same code instead of re-implementing the protocol.
+1. **One pure core, thin wrappers.** All protocol logic lives in
+   `trustgraph-core`, which does no I/O (no files, network, clock or
+   randomness). The CLI, WebAssembly and Node packages only move data in and
+   out. Every other component (web, Holochain, CoreNexus, mobile) uses the
+   same code instead of re-implementing the protocol, and no host (Convex
+   included) shapes the core. See [architecture](../architecture.md).
 2. **Unix pipes.** JSON/NDJSON in and out, so commands compose:
    `trust lens --rollup | trust sign | trust add`.
 3. **Standards over invention.** DIDs, VC 2.0, Data Integrity, JCS, multihash.
@@ -111,7 +125,29 @@ pass in CI.
   `@digitalbazaar/vc` with the `eddsa-jcs-2022` suite) verifies a credential
   signed by `trust`.
 
-### 2. Share over HTTPS
+### 2. Release and publish
+
+- **CLI:** `cargo-dist` for prebuilt binaries and shell/PowerShell
+  installers, plus a Homebrew tap. `release-plz` for versioning and the
+  CHANGELOG.
+- **npm, native:** add the napi-rs cross-compile matrix (the targets are
+  already listed in `crates/trustgraph-node/package.json`) and publish
+  `@trustgraph/trustgraph` with one small package per platform, like
+  `@resvg/resvg-js`.
+- **npm, WebAssembly:** publish `@trustgraph/trustgraph-wasm` from
+  `scripts/build-wasm-package.sh`.
+- **Crates:** publish `trustgraph-core` and `trustgraph-cli` once Phase 1 is
+  frozen.
+- **Convex spike:** deploy a query that imports the WebAssembly package and
+  runs `lens`; confirm bundle size and cold-start time in Convex itself.
+  Then use the native package from a Node action via `externalPackages`.
+- `cargo deny` (licenses and advisories) and coverage (`cargo llvm-cov`) in CI.
+- Later: a UniFFI wrapper for mobile, on the same core.
+- **Acceptance:** `npm install @trustgraph/trustgraph` works on macOS, Linux
+  and Windows without a Rust toolchain, and a Convex deployment computes a
+  lens in a query.
+
+### 3. Share over HTTPS
 
 - `trust publish [--out DIR]`: write your signed atoms as a static feed
   (`atoms.ndjson` plus a small signed index) that any static host can serve.
@@ -122,7 +158,7 @@ pass in CI.
 - **Acceptance:** two machines exchange atoms through GitHub Pages, and each
   sees the other in `trust lens`.
 
-### 3. Holochain
+### 4. Holochain
 
 - An adapter behind a cargo feature (`--features holochain`) that talks to a
   conductor through `holochain_client`: `trust publish --to holochain`,
@@ -134,13 +170,6 @@ pass in CI.
 - **Acceptance:** an atom created by `trust` round-trips through a real
   conductor in an integration test (nix or a container in CI).
 
-### 4. Release
-
-- `cargo-dist` for prebuilt binaries and shell/PowerShell installers, plus a
-  Homebrew tap. `release-plz` for versioning and the CHANGELOG.
-- Publish `trustgraph` and `trust-cli` on crates.io once Phase 1 is frozen.
-- `cargo deny` (licenses and advisories) and coverage (`cargo llvm-cov`) in CI.
-
 ### 5. Friendlier UX
 
 - `trust rate`: interactive prompts when stdin is a TTY (the 2022 TODO list's
@@ -149,13 +178,7 @@ pass in CI.
 - `trust lens --format dot|mermaid` to draw your trust graph.
 - Named contacts (`trust contact add bob did:key:…`) so you don't paste DIDs.
 
-### 6. Embed everywhere
-
-- Compile `trustgraph` to WASM (`wasm-bindgen`) and publish an npm package
-  for web clients, including trustgraph.net.
-- Optional C ABI or UniFFI bindings for mobile.
-
-### 7. Harden
+### 6. Harden
 
 - **Revocation and updates:** a newer atom from the same source replaces an
   older one (the lens already prefers the latest); add explicit revocation
@@ -163,7 +186,8 @@ pass in CI.
 - **Key rotation:** `did:key` can't rotate. Support `did:web` and/or `did:plc`,
   with signed key-succession statements.
 - **Lens research:** compare the cascade with EigenTrust and Appleseed; study
-  Sybil resistance; add `criterion` benchmarks on 100k+ atom graphs.
+  Sybil resistance; add `criterion` benchmarks, and an incremental lens for
+  graphs well beyond 100k atoms (today: precompute rollups natively).
 - **Privacy:** private atoms (encrypted to recipients) and selective sharing,
   as the protocol README calls for.
 
@@ -173,10 +197,11 @@ pass in CI.
 |---|---|---|
 | 1 | Value range | Keep `-1..=1`; `0..1` data is still valid. Update the website and protocol README |
 | 2 | JSON-LD context URL | `https://trustgraph.net/ns/v1` |
-| 3 | Crate names | `trustgraph` (library) and `trust-cli` (binary `trust`) |
-| 4 | Copyright line in LICENSE | Currently the unfilled Apache template; e.g. "Trust Graph contributors" |
-| 5 | Sharing transport order | HTTPS feeds first (no servers), then Holochain |
-| 6 | MSRV policy | Stable minus about 6 releases; raise it on purpose, never by accident |
+| 3 | Package names | crates `trustgraph-core`, `trustgraph-cli` (binary `trust`); npm `@trustgraph/trustgraph`, `@trustgraph/trustgraph-wasm` |
+| 4 | Public or private npm | Public: Convex installs native packages from npm at deploy time |
+| 5 | Copyright line in LICENSE | Currently the unfilled Apache template; e.g. "Trust Graph contributors" |
+| 6 | Sharing transport order | HTTPS feeds first (no servers), then Holochain |
+| 7 | MSRV policy | Stable minus about 6 releases; raise it on purpose, never by accident |
 
 ## Appendix A: the 2022 TODO list
 
@@ -189,4 +214,4 @@ From `src/main.rs` (September 2022):
 | call an API? write to trustgraph right now? | Phases 2 and 3 |
 | what is the interface between CLI and backend? is there a backend? | ✅ The library is the interface; backends are optional plug-ins |
 | spit out jsonld and optionally pipe to storages | ✅ VC 2.0 JSON-LD on stdout; `trust add` stores it |
-| make separate components for cli, and pipes | ✅ `trustgraph` library + `trust` binary |
+| make separate components for cli, and pipes | ✅ pure core + CLI, WebAssembly and Node wrappers ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) |

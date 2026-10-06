@@ -98,7 +98,7 @@ Everything below this line is supporting detail.
 | `@trustgraph/trustgraph-wasm`: web and Node builds, 547 KiB ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ built and tested, not published |
 | `@trustgraph/trustgraph`: napi-rs, tested on Linux, macOS, Windows ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ built and tested, not published |
 | Shared TypeScript types; one smoke test across all JS builds ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
-| `lens` on 100k atoms: 0.78 s WebAssembly, 0.48 s native ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
+| `lens` on 100k atoms (Node 24 LTS): 0.54 s WebAssembly, 0.43 s native ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 
 ## Design principles
 

@@ -188,8 +188,6 @@ pub enum Format {
     Credential,
     /// The atom's canonical JSON (RFC 8785), exactly as hashed
     Canonical,
-    /// Holochain link tags, as used by trustgraph-holochain
-    Holochain,
 }
 
 #[derive(Debug, Args)]
@@ -197,10 +195,6 @@ pub struct ConvertArgs {
     /// Output format
     #[arg(long, value_enum)]
     pub to: Format,
-
-    /// Bucket digits for Holochain tags [default: random]
-    #[arg(long, value_name = "DIGITS")]
-    pub bucket: Option<String>,
 
     #[command(flatten)]
     pub input: InputArgs,

@@ -9,8 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
 use crate::{Error, Result};
 
-/// Number of significant figures a [`Value`] keeps. This matches the
-/// `trustgraph-holochain` reference implementation.
+/// Number of significant figures a [`Value`] keeps.
 pub const SIGNIFICANT_FIGURES: u32 = 9;
 
 /// A trust rating in the range `-1..=1`.
@@ -94,35 +93,6 @@ impl Value {
     pub fn is_positive(self) -> bool {
         self.0.is_sign_positive() && !self.0.is_zero()
     }
-
-    /// The fixed-width form used in Holochain link tags: no leading zero,
-    /// nine decimal places, and `±1` stored as `±.999999999`
-    /// (e.g. `.900000000`, `-.250000000`).
-    #[must_use]
-    pub fn to_holochain_string(self) -> String {
-        let clamped = self.0.clamp(Decimal::new(-999_999_999, 9), Decimal::new(999_999_999, 9));
-        // The reference implementation rounds to nine *significant figures*.
-        let rounded = clamped
-            .round_sf_with_strategy(SIGNIFICANT_FIGURES, RoundingStrategy::MidpointAwayFromZero)
-            .unwrap_or(clamped);
-        let s = strip_leading_zero(rounded.to_string());
-        if s.len() <= MAX_HOLOCHAIN_VALUE_CHARS {
-            return s;
-        }
-        // For tiny values (|v| < 0.01) that gives more than the 12 characters
-        // a tag allows (e.g. `-.00000000100000000`), so use nine decimal
-        // places instead.
-        let mut fixed = clamped.round_dp_with_strategy(9, RoundingStrategy::MidpointAwayFromZero);
-        fixed.rescale(9);
-        strip_leading_zero(fixed.to_string())
-    }
-}
-
-/// Maximum length of the value chunk in a Holochain link tag.
-const MAX_HOLOCHAIN_VALUE_CHARS: usize = 12;
-
-fn strip_leading_zero(s: String) -> String {
-    if s.starts_with("0.") || s.starts_with("-0.") { s.replacen("0.", ".", 1) } else { s }
 }
 
 fn invalid(input: String, reason: &'static str) -> Error {
@@ -234,7 +204,6 @@ mod tests {
         assert_eq!(v("-0.9000000005").to_string(), "-0.900000001");
     }
 
-    // Ported from trustgraph-holochain `test_normalize_value__values_out_of_range`.
     #[test]
     fn rejects_out_of_range() {
         for s in ["2", "-2", "1.000000005", "1.00000001", "-1.00000001", "-1.000000005", "100000000000000000"] {
@@ -242,7 +211,6 @@ mod tests {
         }
     }
 
-    // Ported from trustgraph-holochain `test_normalize_value__values_not_numeric`.
     #[test]
     fn rejects_non_numeric() {
         for s in [
@@ -272,52 +240,6 @@ mod tests {
         ] {
             assert!(s.parse::<Value>().is_err(), "{s:?} should be rejected");
         }
-    }
-
-    // Ported from trustgraph-holochain `test_normalize_value`.
-    #[test]
-    fn holochain_string_matches_reference_implementation() {
-        for (input, expected) in [
-            ("-.9", "-.900000000"),
-            ("-.9000", "-.900000000"),
-            ("-.900000000", "-.900000000"),
-            ("-.9000000004", "-.900000000"),
-            ("-.9000000005", "-.900000001"),
-            ("-0.900000000", "-.900000000"),
-            ("0.8999999995", ".900000000"),
-            ("0.7999999995", ".800000000"),
-            ("-0.8999999995", "-.900000000"),
-            ("-0.7999999995", "-.800000000"),
-            ("0.8999999994", ".899999999"),
-            ("0.7999999994", ".799999999"),
-            ("-0.8999999994", "-.899999999"),
-            ("-0.7999999994", "-.799999999"),
-            (".9", ".900000000"),
-            (".9000", ".900000000"),
-            (".900000000", ".900000000"),
-            ("0.900000000", ".900000000"),
-            ("1", ".999999999"),
-            ("1.0", ".999999999"),
-            ("-1", "-.999999999"),
-            ("-1.0", "-.999999999"),
-        ] {
-            assert_eq!(v(input).to_holochain_string(), expected, "input {input}");
-        }
-    }
-
-    #[test]
-    fn holochain_string_of_zero() {
-        assert_eq!(Value::ZERO.to_holochain_string(), "0");
-    }
-
-    #[test]
-    fn holochain_string_of_tiny_values_fits_twelve_chars() {
-        // Nine significant figures would give `-.00000000100000000`.
-        assert_eq!(v("-0.000000001").to_holochain_string(), "-.000000001");
-        assert_eq!(v("0.00123456789").to_holochain_string(), ".00123456789");
-        assert_eq!(v("0.000123456789").to_holochain_string(), ".000123457");
-        // Small values that fit keep the reference format.
-        assert_eq!(v("0.05").to_holochain_string(), ".0500000000");
     }
 
     #[test]

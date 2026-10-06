@@ -10,7 +10,6 @@
 //!   the `eddsa-jcs-2022` cryptosuite.
 //! - [`TrustGraph`]: the **Agent Lens**, everything one agent can see
 //!   through the **Trust Cascade** of the agents they trust.
-//! - [`holochain`]: the link-tag encoding used by `trustgraph-holochain`.
 //! - [`Record`] / [`Query`]: verified atoms and filters over them.
 //! - [`api`]: the JSON-shaped API that the CLI, WebAssembly and Node
 //!   wrappers all expose.
@@ -39,7 +38,6 @@ pub mod canonical;
 pub mod credential;
 pub mod error;
 pub mod graph;
-pub mod holochain;
 pub mod id;
 pub mod keys;
 pub mod record;

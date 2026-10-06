@@ -2,7 +2,7 @@
 name = "trustgraph-core"
 description = "Trust Graph protocol core: Trust Atoms, signed trust claims and agent-centric trust graphs, with no I/O"
 readme = "README.md"
-keywords = ["trust", "reputation", "did", "verifiable-credentials", "holochain"]
+keywords = ["trust", "reputation", "did", "verifiable-credentials", "web-of-trust"]
 categories = ["cryptography", "data-structures"]
 version.workspace = true
 edition.workspace = true

@@ -6,8 +6,8 @@ use anyhow::{Context, Result, bail};
 use clap::CommandFactory;
 use jiff::{Timestamp, Unit};
 use serde_json::{Value as Json, json};
+use trustgraph_core::api;
 use trustgraph_core::{Keypair, LensOptions, Query, Record, TrustAtom, TrustGraph, credential};
-use trustgraph_core::{api, holochain};
 
 use crate::cli::{AtomArgs, Cli, Command, ConvertArgs, Format, InputArgs, KeyCommand, LensArgs, QueryArgs, SignArgs};
 use crate::home::Home;
@@ -166,13 +166,6 @@ fn convert<W: Write>(args: &ConvertArgs, out: &mut Output<W>) -> Result<Outcome>
             Format::Atom => out.json(&api::parse_atom(json).with_context(context)?)?,
             Format::Credential => out.json(&api::to_credential(json).with_context(context)?)?,
             Format::Canonical => out.line(&api::canonical_atom(json).with_context(context)?)?,
-            Format::Holochain => {
-                let bucket = match &args.bucket {
-                    Some(bucket) => bucket.clone(),
-                    None => holochain::bucket_from_bytes(&random::bytes()?),
-                };
-                out.json(&api::holochain_tags(json, &bucket).with_context(context)?)?;
-            }
         }
     }
     Ok(Outcome::Success)

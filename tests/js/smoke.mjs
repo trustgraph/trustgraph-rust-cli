@@ -53,8 +53,6 @@ const rollups = tg.rollup(items, alice.did, { topic: "sushi" }, now);
 assert.equal(rollups.length, 2);
 assert.equal(tg.verify(tg.signAtom(rollups[0], alice.secretKeyMultibase, now)).valid, true);
 
-const tags = tg.holochainTags({ source: "a", target: "b", content: "sushi", value: 1 }, tg.bucketFromBytes(new Uint8Array(9)));
-assert.equal(tags.forward.tag, "Ŧ→sushi\0.999999999\x00000000000\0");
 assert.equal(tg.canonicalAtom({ target: "b", source: "a" }), '{"source":"a","target":"b"}');
 assert.equal(tg.toCredential({ source: "a", target: "b" }).type[1], "TrustAtomCredential");
 assert.throws(() => tg.parseAtom({ source: "a" }), /target/);

@@ -30,10 +30,6 @@ pub enum Error {
     #[error("verification failed: {0}")]
     Verification(String),
 
-    /// A Holochain link tag could not be encoded or decoded.
-    #[error("invalid Holochain link tag: {0}")]
-    InvalidLinkTag(String),
-
     /// An argument to an API call was out of range or malformed.
     #[error("invalid input: {0}")]
     InvalidInput(String),

@@ -4,7 +4,6 @@
 
 use jiff::Timestamp;
 use proptest::prelude::*;
-use trustgraph_core::holochain::{Direction, LinkTag};
 use trustgraph_core::value::Decimal;
 use trustgraph_core::{Keypair, LensOptions, TrustAtom, TrustGraph, Value, credential};
 
@@ -48,14 +47,6 @@ proptest! {
     }
 
     #[test]
-    fn holochain_value_string_is_within_twelve_chars_and_reparses(v in value()) {
-        let s = v.to_holochain_string();
-        prop_assert!(s.len() <= 12, "{} is too long", s);
-        let back: Value = s.parse().unwrap();
-        prop_assert!((back.as_f64() - v.as_f64()).abs() <= 1e-9);
-    }
-
-    #[test]
     fn values_outside_range_are_rejected(n in prop_oneof![1_000_000_001i64..i64::MAX / 2, i64::MIN / 2..-1_000_000_000]) {
         prop_assert!(Value::new(Decimal::new(n, 9)).is_err());
     }
@@ -95,22 +86,6 @@ proptest! {
         bytes[i] = if bytes[i] == b'a' { b'b' } else { b'a' };
         tampered["credentialSubject"]["id"] = String::from_utf8(bytes).unwrap().into();
         prop_assert!(credential::verify_atom(&tampered).is_err());
-    }
-
-    #[test]
-    fn holochain_tags_round_trip(atom in atom(), reverse in any::<bool>(), bucket in "[0-9]{9}") {
-        let direction = if reverse { Direction::Reverse } else { Direction::Forward };
-        let tag = LinkTag::for_atom(&atom, direction, Some(bucket), None);
-        if let Ok(bytes) = tag.encode() {
-            let decoded = LinkTag::decode(&bytes).unwrap();
-            prop_assert_eq!(decoded.direction, direction);
-            prop_assert_eq!(decoded.content.clone(), atom.content.clone().filter(|c| !c.is_empty()));
-            prop_assert_eq!(decoded.bucket.clone(), tag.bucket);
-            let (base, target) = if reverse { (&atom.target, &atom.source) } else { (&atom.source, &atom.target) };
-            let rebuilt = decoded.to_atom(base, target);
-            prop_assert_eq!(&rebuilt.source, &atom.source);
-            prop_assert_eq!(&rebuilt.target, &atom.target);
-        }
     }
 
     #[test]

@@ -161,12 +161,7 @@ fn convert_formats() {
     assert!(credential.contains("TrustAtomCredential"));
     assert_eq!(env.run(&["convert", "--to", "atom"], &credential), format!("{atom}\n"));
 
-    let holo = &env.json_lines(&["convert", "--to", "holochain", "--bucket", "892412523"], atom)[0];
-    assert_eq!(holo["forward"]["tag"], "Ŧ→sushi\u{0}.999999999\u{0}892412523\u{0}");
-    assert_eq!(holo["reverse"]["tag"], "Ŧ↩sushi\u{0}.999999999\u{0}892412523\u{0}");
-    assert!(holo["forward"]["hex"].as_str().unwrap().starts_with("c5a6e28692"));
-
-    env.cmd().args(["convert", "--to", "holochain", "--bucket", "12"]).write_stdin(atom).assert().failure();
+    env.cmd().args(["convert", "--to", "xml"]).write_stdin(atom).assert().code(2);
 }
 
 #[test]

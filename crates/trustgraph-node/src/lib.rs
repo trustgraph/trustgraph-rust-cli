@@ -94,16 +94,3 @@ pub fn lens(items: Vec<Value>, root: String, options: Option<Value>) -> Result<V
 pub fn rollup(items: Vec<Value>, root: String, options: Option<Value>, at: String) -> Result<Value> {
     json(&core(api::rollup(items, &root, &request(options)?, &at))?)
 }
-
-/// Encodes an atom as `trustgraph-holochain` link tags with a nine-digit bucket.
-#[napi]
-pub fn holochain_tags(atom: Value, bucket: String) -> Result<Value> {
-    json(&core(api::holochain_tags(atom, &bucket))?)
-}
-
-/// Turns nine random bytes into a Holochain bucket.
-#[napi]
-pub fn bucket_from_bytes(bytes: Uint8Array) -> Result<String> {
-    let bytes: &[u8; 9] = (&*bytes).try_into().map_err(|_| napi::Error::from_reason("bucket needs exactly 9 bytes"))?;
-    Ok(trustgraph_core::holochain::bucket_from_bytes(bytes))
-}

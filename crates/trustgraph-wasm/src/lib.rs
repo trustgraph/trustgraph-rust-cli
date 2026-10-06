@@ -131,24 +131,3 @@ pub fn lens(items: JsValue, root: &str, options: JsValue) -> JsResult<JsValue> {
 pub fn rollup(items: JsValue, root: &str, options: JsValue, at: &str) -> JsResult<JsValue> {
     to_js(&core(api::rollup(from_js(items, "items")?, root, &request(options)?, at))?)
 }
-
-/// Encodes an atom as `trustgraph-holochain` link tags with a nine-digit bucket.
-///
-/// # Errors
-///
-/// Throws if the atom is invalid or does not fit in a link tag.
-#[wasm_bindgen(js_name = holochainTags)]
-pub fn holochain_tags(atom: JsValue, bucket: &str) -> JsResult<JsValue> {
-    to_js(&core(api::holochain_tags(from_js(atom, "atom")?, bucket))?)
-}
-
-/// Turns nine random bytes into a Holochain bucket.
-///
-/// # Errors
-///
-/// Throws if `bytes` is not nine bytes long.
-#[wasm_bindgen(js_name = bucketFromBytes)]
-pub fn bucket_from_bytes(bytes: &[u8]) -> JsResult<String> {
-    let bytes: &[u8; 9] = bytes.try_into().map_err(|_| JsError::new("bucket needs exactly 9 bytes"))?;
-    Ok(trustgraph_core::holochain::bucket_from_bytes(bytes))
-}

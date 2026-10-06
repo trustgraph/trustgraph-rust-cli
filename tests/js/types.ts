@@ -16,9 +16,8 @@ const view: TG.LensEntry[] = tg.lens([credential, { source: "a", target: "b", va
 const best: number = view[0]?.score ?? 0;
 const rollups: TG.TrustAtom[] = tg.rollup([credential], me.did, null, new Date().toISOString());
 const id: string = tg.atomId(rollups[0]!);
-const tags: TG.HolochainTags = tg.holochainTags({ source: "a", target: "b" }, tg.bucketFromBytes(new Uint8Array(9)));
 
 // @ts-expect-error depth must be a number
 tg.lens([], me.did, { depth: "3" });
 
-export { atom, best, id, tags };
+export { atom, best, id };

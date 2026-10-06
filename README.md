@@ -20,8 +20,6 @@ Everything rests on one pure Rust core, shipped as a command line tool
 - **Agent-centric.** There is no global score. You see the world through your
   **Agent Lens**: your own ratings, plus those of the people you trust, cascading
   outward with decreasing weight (the **Trust Cascade**).
-- **Interoperable.** Reads and writes the link-tag format of
-  [trustgraph-holochain](https://github.com/trustgraph/trustgraph-holochain).
 - **Unix-friendly.** JSON in, JSON out, one item per line. Commands pipe into
   each other and into `jq`.
 - **Offline.** Nothing needs a server or a network connection.
@@ -80,7 +78,7 @@ trust lens --topic sushi --rollup | trust sign | trust add
 | `trust sign [FILE]` | Sign atoms as Verifiable Credentials |
 | `trust verify [FILE]` | Verify credentials. Exits 1 if any are invalid |
 | `trust id [FILE]` | Print content IDs (`Qm…` SHA2-256 multihashes) |
-| `trust convert --to atom\|credential\|canonical\|holochain [FILE]` | Convert between formats |
+| `trust convert --to atom\|credential\|canonical [FILE]` | Convert between formats |
 | `trust add [FILE]` | Add atoms or signed credentials to the local store |
 | `trust query [--source] [--target] [--topic] [--signed-only]` | Search the local store |
 | `trust lens [AGENT] [--topic] [--depth] [--decay] [--rollup]` | View the graph through an agent's lens |
@@ -171,7 +169,7 @@ tg.lens([credential /* , …everyone else's atoms */], me.did, { topic: "sushi" 
 
 | Path | Language | What it is |
 |---|---|---|
-| [`crates/trustgraph-core`](crates/trustgraph-core) | Rust | The protocol: atoms, values, IDs, keys, credentials, Holochain tags, lens, and the shared `api`. No I/O |
+| [`crates/trustgraph-core`](crates/trustgraph-core) | Rust | The protocol: atoms, values, IDs, keys, credentials, lens, and the shared `api`. No I/O |
 | [`crates/trustgraph-cli`](crates/trustgraph-cli) | Rust | The `trust` binary: files, stdin/stdout, keystore, local store, OS randomness |
 | [`crates/trustgraph-wasm`](crates/trustgraph-wasm) | Rust → npm | `@trustgraph/trustgraph-wasm` (wasm-bindgen) |
 | [`crates/trustgraph-node`](crates/trustgraph-node) | Rust → npm | `@trustgraph/trustgraph` (napi-rs) |
@@ -215,8 +213,7 @@ scripts/build-wasm-package.sh             # WebAssembly package → target/npm/t
 pnpm run typecheck
 ```
 
-The signing code is checked against the W3C `eddsa-jcs-2022` test vectors, and
-the Holochain encoding against `trustgraph-holochain`'s own test cases.
+The signing code is checked against the W3C `eddsa-jcs-2022` test vectors.
 
 ## License
 

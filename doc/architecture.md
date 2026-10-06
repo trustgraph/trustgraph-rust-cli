@@ -42,7 +42,7 @@ pass everything in:
 
 | The core needs | Callers supply it |
 |---|---|
-| Randomness (key seeds, Holochain buckets) | 32 / 9 random bytes: `getrandom` in the CLI, `crypto.getRandomValues` in JavaScript |
+| Randomness (key seeds) | 32 random bytes: `getrandom` in the CLI, `crypto.getRandomValues` in JavaScript |
 | The current time (signing, rollups) | An RFC 3339 string or `jiff::Timestamp` |
 | Data to score | Atoms and credentials as values: from files (CLI), database rows (servers), IndexedDB (browsers) |
 
@@ -75,8 +75,6 @@ between them:
 | `verify(credential)` | `{valid, id, issuer, atom}` or `{valid: false, error}` |
 | `lens(items, root, options)` | The Agent Lens / Trust Cascade |
 | `rollup(items, root, options, at)` | Lens results as atoms, ready to sign and share |
-| `holochainTags(atom, bucket)` | `trustgraph-holochain` link tags |
-| `bucketFromBytes(bytes)` | Holochain bucket from 9 random bytes |
 
 The CLI calls the same functions for `verify` and `convert`. TypeScript types
 for both npm packages are in [`bindings/trustgraph.d.ts`](../bindings/trustgraph.d.ts).
@@ -89,7 +87,7 @@ the packages are proven to behave identically.
 | Need | Use | Why |
 |---|---|---|
 | Trust scores inside live, reactive queries (e.g. a Convex query, so the UI updates on its own) | **WebAssembly** | Native addons can't run in Convex's default runtime; WebAssembly can, and is deterministic |
-| Browsers, Cloudflare Workers, Deno | **WebAssembly** | Runs anywhere WebAssembly runs; 547 KiB (229 KiB gzipped) |
+| Browsers, Cloudflare Workers, Deno | **WebAssembly** | Runs anywhere WebAssembly runs; 538 KiB (225 KiB gzipped) |
 | Heavy batch work: full-graph recomputes, crawling, mass verification | **Native** in a Node process or Convex Node action, or the **CLI** outside Convex writing results back over HTTP | Faster than WebAssembly (up to 3–4× on verification); more memory headroom |
 | People, scripts and other projects | **CLI** | No JavaScript or Convex involved |
 
@@ -120,7 +118,7 @@ filter, averaged over two runs. CI prints the same benchmark on every run:
 | `lens`, 10,000 atoms | 51 ms | 35 ms |
 | `lens`, 100,000 atoms | 0.54 s | 0.43 s |
 | `verify`, one credential | 0.26 ms | 0.07 ms |
-| Package size | 547 KiB wasm (229 KiB gzipped) | 1.2 MB (Linux x64) |
+| Package size | 538 KiB wasm (225 KiB gzipped) | 1.2 MB (Linux x64) |
 
 Against Convex's limits for queries and mutations (1 s, 64 MiB, 32 MiB
 bundle): graphs up to tens of thousands of atoms fit comfortably. Beyond about

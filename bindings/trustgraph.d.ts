@@ -80,13 +80,6 @@ export interface LensEntry {
   raters: number;
 }
 
-export interface HolochainTags {
-  source: string;
-  target: string;
-  forward: { tag: string; hex: string };
-  reverse: { tag: string; hex: string };
-}
-
 /** Atoms and/or signed credentials. */
 export type Item = TrustAtomInput | Credential;
 
@@ -106,5 +99,3 @@ export function verify(credential: Credential): Verification;
 export function lens(items: Item[], root: string, options?: LensOptions | null): LensEntry[];
 /** Rollup atoms (unsigned) for `root`'s lens, timestamped `at` (RFC 3339). */
 export function rollup(items: Item[], root: string, options: LensOptions | null | undefined, at: string): TrustAtom[];
-export function holochainTags(atom: TrustAtomInput, bucket: string): HolochainTags;
-export function bucketFromBytes(bytes: Uint8Array): string;

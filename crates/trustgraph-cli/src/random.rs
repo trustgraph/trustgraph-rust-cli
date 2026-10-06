@@ -1,5 +1,5 @@
 //! Randomness from the operating system. The core does no I/O, so the CLI
-//! supplies it (for key seeds and Holochain buckets).
+//! supplies it (for key seeds).
 
 use anyhow::{Context, Result};
 

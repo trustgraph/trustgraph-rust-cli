@@ -14,7 +14,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
-use crate::holochain::{BUCKET_DIGITS, Direction, LinkTag};
 use crate::{Error, Keypair, LensEntry, LensOptions, Result, TrustAtom, TrustGraph, credential};
 
 /// The core's version.
@@ -236,56 +235,6 @@ pub fn rollup(items: Vec<Json>, root: &str, request: &LensRequest, at: &str) -> 
     TrustGraph::rollup(root, &entries, &request.options()?, at)
 }
 
-/// One encoded Holochain link tag.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EncodedTag {
-    /// The tag as text (with NUL separators).
-    pub tag: String,
-    /// The tag's bytes, in lowercase hex.
-    pub hex: String,
-}
-
-/// The forward and reverse Holochain link tags for an atom.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HolochainTags {
-    /// The atom's source (the forward link's base).
-    pub source: String,
-    /// The atom's target (the forward link's target).
-    pub target: String,
-    /// The `source → target` link tag.
-    pub forward: EncodedTag,
-    /// The `target → source` link tag.
-    pub reverse: EncodedTag,
-}
-
-/// Encodes an atom as `trustgraph-holochain` link tags, with the given
-/// nine-digit bucket (see [`crate::holochain::bucket_from_bytes`]).
-///
-/// # Errors
-///
-/// Fails if the atom is invalid or does not fit in a link tag.
-pub fn holochain_tags(atom: Json, bucket: &str) -> Result<HolochainTags> {
-    if bucket.len() != BUCKET_DIGITS {
-        return Err(Error::InvalidInput(format!("bucket must be {BUCKET_DIGITS} digits")));
-    }
-    let atom = parse_atom(atom)?;
-    let encode = |direction| -> Result<EncodedTag> {
-        let bytes = LinkTag::for_atom(&atom, direction, Some(bucket.to_owned()), None).encode()?;
-        Ok(EncodedTag { tag: String::from_utf8_lossy(&bytes).into_owned(), hex: to_hex(&bytes) })
-    };
-    Ok(HolochainTags {
-        forward: encode(Direction::Forward)?,
-        reverse: encode(Direction::Reverse)?,
-        source: atom.source,
-        target: atom.target,
-    })
-}
-
-fn to_hex(bytes: &[u8]) -> String {
-    const DIGITS: &[u8; 16] = b"0123456789abcdef";
-    bytes.iter().flat_map(|b| [DIGITS[usize::from(b >> 4)], DIGITS[usize::from(b & 0xf)]]).map(char::from).collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -389,16 +338,6 @@ mod tests {
         let request: LensRequest = serde_json::from_str(r#"{"topic":"sushi","signedOnly":true}"#).unwrap();
         assert_eq!(request.depth, 3);
         assert!(request.signed_only);
-    }
-
-    #[test]
-    fn holochain_tags_match_reference_format() {
-        let tags = holochain_tags(json!({ "source": "a", "target": "b", "content": "sushi", "value": 1 }), "892412523")
-            .unwrap();
-        assert_eq!(tags.forward.tag, "Ŧ→sushi\u{0}.999999999\u{0}892412523\u{0}");
-        assert_eq!(tags.reverse.tag, "Ŧ↩sushi\u{0}.999999999\u{0}892412523\u{0}");
-        assert_eq!(&tags.forward.hex[..10], "c5a6e28692");
-        assert!(holochain_tags(json!({ "source": "a", "target": "b" }), "12").is_err());
     }
 
     #[test]

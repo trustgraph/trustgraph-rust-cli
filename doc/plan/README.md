@@ -20,9 +20,9 @@ Rust core. It will be renamed to `trustgraph/trustgraph`.
 
 **Next steps, in order:**
 
-0. **Become the monorepo.** Bring in the protocol docs, the JSON-LD schema and
-   the Holochain zome from their separate repos, archive the old ones, and
-   rename this repo to `trustgraph/trustgraph`.
+0. **Become the monorepo.** Bring in the protocol docs and the JSON-LD schema
+   from their separate repos, archive the old ones, and rename this repo to
+   `trustgraph/trustgraph`.
 1. **Lock the data format.** Publish the JSON-LD context and JSON Schema at
    `trustgraph.net`, and freeze the atom and credential shapes as v1.
 2. **Release and publish.** Prebuilt `trust` binaries (cargo-dist, Homebrew),
@@ -33,17 +33,14 @@ Rust core. It will be renamed to `trustgraph/trustgraph`.
    anywhere (GitHub Pages, any static host). `trust follow <url>` and
    `trust pull` fetch other people's feeds. This gives a working network with
    no servers to run.
-4. **Holochain.** Read and write atoms on a live conductor using the
-   `trustgraph-holochain` zome (moved into `holochain/` in Phase 0). The
-   link-tag codec is already done.
-5. **Friendlier UX.** Interactive `trust rate`, readable table output, and
+4. **Friendlier UX.** Interactive `trust rate`, readable table output, and
    `trust lens --format dot|mermaid` to draw your graph.
-6. **Harden.** Revoking and updating ratings, key rotation, Sybil-resistance
+5. **Harden.** Revoking and updating ratings, key rotation, Sybil-resistance
    research for the lens, and performance beyond 100k atoms.
 
 **Decisions I need from you** (details in [Open decisions](#open-decisions)):
 
-- **Value range:** [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11) uses `-1..=1` (from Holochain), but trustgraph.net
+- **Value range:** [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11) uses `-1..=1` (negative values express distrust), but trustgraph.net
   and the protocol README say `0..1`. Confirm, and I'll update those docs.
 - **Domain for schemas:** is `https://trustgraph.net/ns/v1` OK for the
   JSON-LD context?
@@ -70,8 +67,6 @@ Everything below this line is supporting detail.
 - **Prior art** in the `trustgraph` org:
   - [`trustgraph/trustgraph`](https://github.com/trustgraph/trustgraph): the
     protocol README (Trust Atoms, signed claims, multihash IDs).
-  - [`trustgraph/trustgraph-holochain`](https://github.com/trustgraph/trustgraph-holochain):
-    atoms stored as Holochain links (`Ŧ→content\0value\0bucket\0extra`).
   - [`trustgraph/js-trustgraph-cli`](https://github.com/trustgraph/js-trustgraph-cli)
     (archived): `trust claim`, `trust get`, `trust map`.
   - [`trustgraph/trustgraph-schema`](https://github.com/trustgraph/trustgraph-schema):
@@ -87,10 +82,9 @@ Everything below this line is supporting detail.
 |---|---|
 | Workspace: protocol library + `trust` binary ([PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11)) | ✅ |
 | Trust Atoms, validation, canonical JSON (RFC 8785), `Qm…` content IDs | ✅ |
-| Values: exact decimals in `-1..=1`, Holochain-compatible normalization | ✅ |
+| Values: exact decimals in `-1..=1`, rounded to nine significant figures | ✅ |
 | `did:key` Ed25519 identities, keystore (`0600`) | ✅ |
 | W3C VC 2.0 + `eddsa-jcs-2022` sign/verify (passes the spec's test vectors) | ✅ |
-| Holochain link-tag encode/decode | ✅ |
 | Local append-only store, verified on the way in | ✅ |
 | Agent Lens / Trust Cascade, topic filters, rollups | ✅ |
 | CI (3 OSes, MSRV, clippy pedantic, rustdoc), Dependabot, Apache-2.0 | ✅ |
@@ -108,7 +102,7 @@ Everything below this line is supporting detail.
 2. **One pure core, thin wrappers.** All protocol logic lives in
    `trustgraph-core`, which does no I/O (no files, network, clock or
    randomness). The CLI, WebAssembly and Node packages only move data in and
-   out. Every other component (web, Holochain, CoreNexus, mobile) uses the
+   out. Every other component (web, CoreNexus, mobile) uses the
    same code instead of re-implementing the protocol, and no host (Convex
    included) shapes the core. See [architecture](../architecture.md).
 3. **Unix pipes.** JSON/NDJSON in and out, so commands compose:
@@ -136,7 +130,6 @@ built on it change together, in one PR and one CI run.
 |---|---|---|
 | [`trustgraph/trustgraph`](https://github.com/trustgraph/trustgraph) (protocol README) | `doc/protocol.md`, updated to the current atom and credential formats | Rename the old repo to `trustgraph-protocol-archive` and archive it |
 | [`trustgraph/trustgraph-schema`](https://github.com/trustgraph/trustgraph-schema) (JSON-LD) | `schema/`, alongside the new v1 context (Phase 1) | Archive; keep GitHub Pages serving the old URL, or redirect it |
-| [`trustgraph/trustgraph-holochain`](https://github.com/trustgraph/trustgraph-holochain) (zome) | `holochain/`, its own Cargo workspace (zomes pin `hdk` versions and build for Holochain's WebAssembly target), using `trustgraph-core` for the tag codec | Archive once the zome builds and tests here |
 | [`trustgraph/js-trustgraph-cli`](https://github.com/trustgraph/js-trustgraph-cli) | Nothing: `trust` replaces it | Already archived |
 | This repo, `trustgraph-rust-cli` | | Rename to `trustgraph/trustgraph`. GitHub redirects the old URLs |
 
@@ -146,8 +139,8 @@ built on it change together, in one PR and one CI run.
   packages in `packages/*` (one pnpm workspace), docs in `doc/`. TypeScript
   calls the core through the WebAssembly or native package and never
   re-implements protocol logic.
-- **Acceptance:** one `cargo test` and one CI run cover the core, the CLI, the
-  bindings and the Holochain zome; the old repos are archived and point here.
+- **Acceptance:** one `cargo test` and one CI run cover everything in the
+  repo; the old repos are archived and point here.
 
 ### 1. Lock the v1 data format
 
@@ -195,19 +188,7 @@ built on it change together, in one PR and one CI run.
 - **Acceptance:** two machines exchange atoms through GitHub Pages, and each
   sees the other in `trust lens`.
 
-### 4. Holochain
-
-- An adapter behind a cargo feature (`--features holochain`) that talks to a
-  conductor through `holochain_client`: `trust publish --to holochain`,
-  `trust pull --from holochain`.
-- Map `did:key` identities to Holochain agent keys (both are Ed25519).
-- Upstream fix: for tiny values, `trustgraph-holochain`'s value strings can
-  exceed the documented 12-character limit (`-.00000000100000000`). `trust`
-  falls back to nine decimal places for these; align the zome to match.
-- **Acceptance:** an atom created by `trust` round-trips through a real
-  conductor in an integration test (nix or a container in CI).
-
-### 5. Friendlier UX
+### 4. Friendlier UX
 
 - `trust rate`: interactive prompts when stdin is a TTY (the 2022 TODO list's
   "prompts that enforce things"), using `dialoguer`.
@@ -215,7 +196,7 @@ built on it change together, in one PR and one CI run.
 - `trust lens --format dot|mermaid` to draw your trust graph.
 - Named contacts (`trust contact add bob did:key:…`) so you don't paste DIDs.
 
-### 6. Harden
+### 5. Harden
 
 - **Revocation and updates:** a newer atom from the same source replaces an
   older one (the lens already prefers the latest); add explicit revocation
@@ -237,7 +218,7 @@ built on it change together, in one PR and one CI run.
 | 3 | Package names | crates `trustgraph-core`, `trustgraph-cli` (binary `trust`); npm `@trustgraph/trustgraph`, `@trustgraph/trustgraph-wasm` |
 | 4 | Public or private npm | Public: Convex installs native packages from npm at deploy time |
 | 5 | Copyright line in LICENSE | Currently the unfilled Apache template; e.g. "Trust Graph contributors" |
-| 6 | Sharing transport order | HTTPS feeds first (no servers), then Holochain |
+| 6 | Sharing transport | HTTPS feeds first (no servers to run); add other transports only when there is demand |
 | 7 | MSRV policy | Stable minus about 6 releases; raise it on purpose, never by accident |
 | 8 | The existing `trustgraph/trustgraph` repo | Move its README into `doc/protocol.md`, rename it `trustgraph-protocol-archive`, archive it, then rename this repo to `trustgraph/trustgraph` |
 
@@ -248,7 +229,7 @@ From `src/main.rs` (September 2022):
 | 2022 TODO | Status |
 |---|---|
 | decide on some initial use cases | ✅ rate, sign, verify, store, query, lens ([PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11)) |
-| make ArgGroup, make prompts that enforce things | ✅ validation in [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11); interactive prompts in Phase 5 |
+| make ArgGroup, make prompts that enforce things | ✅ validation in [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11); interactive prompts in Phase 4 |
 | call an API? write to trustgraph right now? | Phases 2 and 3 |
 | what is the interface between CLI and backend? is there a backend? | ✅ The library is the interface; backends are optional plug-ins |
 | spit out jsonld and optionally pipe to storages | ✅ VC 2.0 JSON-LD on stdout; `trust add` stores it |

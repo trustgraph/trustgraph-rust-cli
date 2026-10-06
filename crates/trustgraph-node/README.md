@@ -6,5 +6,5 @@ Use it for heavy work in Node, including Convex Node actions via
 [types](../../bindings/trustgraph.d.ts) and the [architecture](../../doc/architecture.md).
 
 ```sh
-npm ci && npm run build && npm test
+npm ci && npm run build:node && npm run test:node   # from the repo root
 ```

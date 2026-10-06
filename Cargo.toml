@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/trustgraph-core", "crates/trustgraph-cli", "crates/trustgraph-wasm", "crates/trustgraph-node"]
+members = ["crates/*"]
 
 [workspace.package]
 version = "0.1.0"

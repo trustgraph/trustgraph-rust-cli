@@ -1,0 +1,18 @@
+{
+  "name": "trustgraph-monorepo",
+  "private": true,
+  "description": "Trust Graph monorepo: Rust crates in crates/, JavaScript and TypeScript packages in packages/ and crates/*/ (npm bindings)",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "crates/trustgraph-node",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:node": "npm run build --workspace @trustgraph/trustgraph",
+    "test:node": "npm test --workspace @trustgraph/trustgraph",
+    "typecheck": "tsc --noEmit --strict --lib es2022,dom tests/js/types.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

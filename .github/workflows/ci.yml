@@ -69,12 +69,14 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: npm
+      - run: npm ci
       - run: cargo clippy --target wasm32-unknown-unknown -p trustgraph-core -p trustgraph-wasm --locked
       - run: scripts/build-wasm-package.sh
       - run: node tests/js/smoke.mjs target/npm/trustgraph-wasm/node/trustgraph_wasm.cjs
       - run: node tests/js/smoke.mjs target/npm/trustgraph-wasm/web/trustgraph_wasm.js
       - name: TypeScript types
-        run: npx -y -p typescript@5 tsc --noEmit --strict --lib es2022,dom tests/js/types.ts
+        run: npm run typecheck
       - name: Benchmark (informational)
         run: node tests/js/bench.mjs target/npm/trustgraph-wasm/node/trustgraph_wasm.cjs
 
@@ -85,9 +87,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-    defaults:
-      run:
-        working-directory: crates/trustgraph-node
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -96,7 +95,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: crates/trustgraph-node/package-lock.json
       - run: npm ci
-      - run: npm run build
-      - run: npm test
+      - run: npm run build:node
+      - run: npm run test:node

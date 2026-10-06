@@ -3,10 +3,13 @@
 [![CI](https://github.com/trustgraph/trustgraph-rust-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/trustgraph/trustgraph-rust-cli/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-The reference implementation of [Trust Graph](https://trustgraph.net), an open
-protocol for sourcing and rendering trust relationships: one pure Rust core,
-shipped as a command line tool (`trust`), a WebAssembly package and a native
-Node.js module.
+The [Trust Graph](https://trustgraph.net) monorepo: the protocol's reference
+implementation and every project built on it. Trust Graph is an open protocol
+for sourcing and rendering trust relationships.
+
+Everything rests on one pure Rust core, shipped as a command line tool
+(`trust`), a WebAssembly package and a native Node.js module. See
+[what's in this repo](#whats-in-this-repo).
 
 - **Trust Atoms.** Every rating, vouch or review is one small statement:
   *source* trusts *target*, about *content*, this much (`-1` to `1`).
@@ -164,26 +167,52 @@ tg.verify(credential); // { valid: true, id: "Qm…", issuer: "did:key:…", ato
 tg.lens([credential /* , …everyone else's atoms */], me.did, { topic: "sushi" });
 ```
 
+## What's in this repo
+
+| Path | Language | What it is |
+|---|---|---|
+| [`crates/trustgraph-core`](crates/trustgraph-core) | Rust | The protocol: atoms, values, IDs, keys, credentials, Holochain tags, lens, and the shared `api`. No I/O |
+| [`crates/trustgraph-cli`](crates/trustgraph-cli) | Rust | The `trust` binary: files, stdin/stdout, keystore, local store, OS randomness |
+| [`crates/trustgraph-wasm`](crates/trustgraph-wasm) | Rust → npm | `@trustgraph/trustgraph-wasm` (wasm-bindgen) |
+| [`crates/trustgraph-node`](crates/trustgraph-node) | Rust → npm | `@trustgraph/trustgraph` (napi-rs) |
+| [`bindings/`](bindings) | TypeScript | Types shared by both npm packages |
+| [`tests/js/`](tests/js) | JavaScript | One smoke test run against every JavaScript build, plus a benchmark |
+| [`scripts/`](scripts) | Shell | Core purity check, WebAssembly packaging |
+| [`doc/`](doc) | | [Architecture](doc/architecture.md) and [roadmap](doc/plan/README.md) |
+
+New projects go in this repo:
+
+- **Rust crates** go in `crates/<name>`. The Cargo workspace picks up
+  `crates/*` automatically.
+- **TypeScript packages** go in `packages/<name>`. The root npm workspace
+  picks up `packages/*` automatically.
+
+### Languages: Rust first, TypeScript where it fits
+
+- **Rust** for anything that implements the protocol: data formats,
+  cryptography, scoring, storage, networking, and tools. Protocol logic lives
+  in `trustgraph-core` and nowhere else.
+- **TypeScript** where it is the natural fit: web front ends, Convex functions,
+  browser extensions, glue code. TypeScript packages call the core through
+  `@trustgraph/trustgraph-wasm` or `@trustgraph/trustgraph`. They never
+  re-implement signing, IDs or scoring, so behaviour can't drift between
+  languages.
+
 ## Development
 
 ```sh
+# Rust
 cargo test --workspace                    # unit, property, end-to-end and doc tests
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 scripts/check-core-purity.sh              # the core must stay free of I/O
-scripts/build-wasm-package.sh             # WebAssembly package → target/npm/trustgraph-wasm
-(cd crates/trustgraph-node && npm ci && npm run build && npm test)  # native addon
-```
 
-| Path | Contents |
-|---|---|
-| `crates/trustgraph-core/` | The protocol: atoms, values, IDs, keys, credentials, Holochain tags, lens, and the shared `api`. No I/O |
-| `crates/trustgraph-cli/` | The `trust` binary: files, stdin/stdout, keystore, local store, OS randomness |
-| `crates/trustgraph-wasm/` | `@trustgraph/trustgraph-wasm` (wasm-bindgen) |
-| `crates/trustgraph-node/` | `@trustgraph/trustgraph` (napi-rs) |
-| `bindings/` | TypeScript types shared by both npm packages |
-| `tests/js/` | One smoke test run against every JavaScript build, plus a benchmark |
-| `doc/` | [Architecture](doc/architecture.md) and [roadmap](doc/plan/README.md) |
+# JavaScript / TypeScript (npm workspaces, from the repo root)
+npm ci
+npm run build:node && npm run test:node   # native addon
+scripts/build-wasm-package.sh             # WebAssembly package → target/npm/trustgraph-wasm
+npm run typecheck
+```
 
 The signing code is checked against the W3C `eddsa-jcs-2022` test vectors, and
 the Holochain encoding against `trustgraph-holochain`'s own test cases.

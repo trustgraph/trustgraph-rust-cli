@@ -14,8 +14,15 @@ module (Node, Convex Node actions). See [architecture](../architecture.md).
 put them. The next big steps are **publishing the packages** so CoreNexus and
 others can use them, then **sharing** atoms between people.
 
+**This repo is the Trust Graph monorepo.** Every Trust Graph project lives
+here: Rust first, TypeScript where it fits, with all protocol logic in one
+Rust core. It will be renamed to `trustgraph/trustgraph`.
+
 **Next steps, in order:**
 
+0. **Become the monorepo.** Bring in the protocol docs, the JSON-LD schema and
+   the Holochain zome from their separate repos, archive the old ones, and
+   rename this repo to `trustgraph/trustgraph`.
 1. **Lock the data format.** Publish the JSON-LD context and JSON Schema at
    `trustgraph.net`, and freeze the atom and credential shapes as v1.
 2. **Release and publish.** Prebuilt `trust` binaries (cargo-dist, Homebrew),
@@ -26,8 +33,9 @@ others can use them, then **sharing** atoms between people.
    anywhere (GitHub Pages, any static host). `trust follow <url>` and
    `trust pull` fetch other people's feeds. This gives a working network with
    no servers to run.
-4. **Holochain.** Read and write atoms on a live conductor using the existing
-   `trustgraph-holochain` zome. The link-tag codec is already done.
+4. **Holochain.** Read and write atoms on a live conductor using the
+   `trustgraph-holochain` zome (moved into `holochain/` in Phase 0). The
+   link-tag codec is already done.
 5. **Friendlier UX.** Interactive `trust rate`, readable table output, and
    `trust lens --format dot|mermaid` to draw your graph.
 6. **Harden.** Revoking and updating ratings, key rotation, Sybil-resistance
@@ -45,6 +53,10 @@ others can use them, then **sharing** atoms between people.
 - **Public or private npm:** Convex installs native packages from npm at
   deploy time. Public is simplest; private needs a test that Convex can
   install from a private registry first.
+- **The existing `trustgraph/trustgraph` repo:** that name is taken by the
+  protocol README repo. To rename this repo to `trustgraph/trustgraph`, first
+  move that README in here (Phase 0), then rename the old repo to
+  `trustgraph-protocol-archive` and archive it.
 
 Everything below this line is supporting detail.
 
@@ -90,27 +102,52 @@ Everything below this line is supporting detail.
 
 ## Design principles
 
-1. **One pure core, thin wrappers.** All protocol logic lives in
+1. **One repo, Rust first.** Every Trust Graph project lives in this
+   monorepo. Protocol logic is Rust; TypeScript is welcome where it fits (web,
+   Convex, extensions) but always calls the core rather than re-implementing it.
+2. **One pure core, thin wrappers.** All protocol logic lives in
    `trustgraph-core`, which does no I/O (no files, network, clock or
    randomness). The CLI, WebAssembly and Node packages only move data in and
    out. Every other component (web, Holochain, CoreNexus, mobile) uses the
    same code instead of re-implementing the protocol, and no host (Convex
    included) shapes the core. See [architecture](../architecture.md).
-2. **Unix pipes.** JSON/NDJSON in and out, so commands compose:
+3. **Unix pipes.** JSON/NDJSON in and out, so commands compose:
    `trust lens --rollup | trust sign | trust add`.
-3. **Standards over invention.** DIDs, VC 2.0, Data Integrity, JCS, multihash.
+4. **Standards over invention.** DIDs, VC 2.0, Data Integrity, JCS, multihash.
    Trust Graph's own formats are conversions on top.
-4. **Offline first, servers optional.** Creating, signing, verifying and
+5. **Offline first, servers optional.** Creating, signing, verifying and
    exploring never need the network. Sharing is a plug-in.
-5. **Agent-centric.** There is no global score, ever. Every result is from
+6. **Agent-centric.** There is no global score, ever. Every result is from
    someone's point of view.
-6. **Proven, not hoped.** Every format has spec vectors, property tests, or
+7. **Proven, not hoped.** Every format has spec vectors, property tests, or
    cross-implementation fixtures, and CI stays green.
 
 ## Next phases
 
 Each phase is a few small PRs, and is done only when its acceptance criteria
 pass in CI.
+
+### 0. Become the monorepo
+
+One repository for every Trust Graph project, so the core and everything
+built on it change together, in one PR and one CI run.
+
+| Today | Moves to | Then |
+|---|---|---|
+| [`trustgraph/trustgraph`](https://github.com/trustgraph/trustgraph) (protocol README) | `doc/protocol.md`, updated to the current atom and credential formats | Rename the old repo to `trustgraph-protocol-archive` and archive it |
+| [`trustgraph/trustgraph-schema`](https://github.com/trustgraph/trustgraph-schema) (JSON-LD) | `schema/`, alongside the new v1 context (Phase 1) | Archive; keep GitHub Pages serving the old URL, or redirect it |
+| [`trustgraph/trustgraph-holochain`](https://github.com/trustgraph/trustgraph-holochain) (zome) | `holochain/`, its own Cargo workspace (zomes pin `hdk` versions and build for Holochain's WebAssembly target), using `trustgraph-core` for the tag codec | Archive once the zome builds and tests here |
+| [`trustgraph/js-trustgraph-cli`](https://github.com/trustgraph/js-trustgraph-cli) | Nothing: `trust` replaces it | Already archived |
+| This repo, `trustgraph-rust-cli` | | Rename to `trustgraph/trustgraph`. GitHub redirects the old URLs |
+
+- Import with history (`git subtree add` or `git filter-repo`), so blame and
+  past discussion survive.
+- Layout rules: Rust crates in `crates/*` (one Cargo workspace), TypeScript
+  packages in `packages/*` (one npm workspace), docs in `doc/`. TypeScript
+  calls the core through the WebAssembly or native package and never
+  re-implements protocol logic.
+- **Acceptance:** one `cargo test` and one CI run cover the core, the CLI, the
+  bindings and the Holochain zome; the old repos are archived and point here.
 
 ### 1. Lock the v1 data format
 
@@ -202,6 +239,7 @@ pass in CI.
 | 5 | Copyright line in LICENSE | Currently the unfilled Apache template; e.g. "Trust Graph contributors" |
 | 6 | Sharing transport order | HTTPS feeds first (no servers), then Holochain |
 | 7 | MSRV policy | Stable minus about 6 releases; raise it on purpose, never by accident |
+| 8 | The existing `trustgraph/trustgraph` repo | Move its README into `doc/protocol.md`, rename it `trustgraph-protocol-archive`, archive it, then rename this repo to `trustgraph/trustgraph` |
 
 ## Appendix A: the 2022 TODO list
 

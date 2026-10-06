@@ -143,7 +143,7 @@ built on it change together, in one PR and one CI run.
 - Import with history (`git subtree add` or `git filter-repo`), so blame and
   past discussion survive.
 - Layout rules: Rust crates in `crates/*` (one Cargo workspace), TypeScript
-  packages in `packages/*` (one npm workspace), docs in `doc/`. TypeScript
+  packages in `packages/*` (one pnpm workspace), docs in `doc/`. TypeScript
   calls the core through the WebAssembly or native package and never
   re-implements protocol logic.
 - **Acceptance:** one `cargo test` and one CI run cover the core, the CLI, the

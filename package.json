@@ -13,6 +13,6 @@
     "typecheck": "tsc --noEmit --strict --lib es2022,dom tests/js/types.ts"
   },
   "devDependencies": {
-    "typescript": "^5.9.0"
+    "typescript": "^7.0.2"
   }
 }

@@ -100,8 +100,9 @@ Everything below this line is supporting detail.
    monorepo. Protocol logic is Rust; TypeScript is welcome where it fits (web,
    Convex, extensions) but always calls the core rather than re-implementing it.
 2. **One pure core, thin wrappers.** All protocol logic lives in
-   `trustgraph-core`, which does no I/O (no files, network, clock or
-   randomness). The CLI, WebAssembly and Node packages only move data in and
+   `trustgraph-core`, which does no I/O (no files, network or clock;
+   randomness only through the opt-in `random` feature, which the wrappers
+   turn on). The CLI, WebAssembly and Node packages only move data in and
    out. Every other component (web, CoreNexus, mobile) uses the
    same code instead of re-implementing the protocol, and no host (Convex
    included) shapes the core. See [architecture](../architecture.md).

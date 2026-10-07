@@ -5,26 +5,29 @@
 **Where we are:** [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11) turned this repo from a "hello world" scaffold into
 `trust`, a working CLI and Rust library for the Trust Graph protocol. You can
 create identities, sign trust ratings as W3C Verifiable Credentials, store
-them, and explore them through your **Agent Lens**. [PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15) then split it into
-**one pure Rust core with three thin wrappers**: the `trust` CLI, a
-WebAssembly package (browsers, Workers, Convex queries) and a native Node
-module (Node, Convex Node actions). See [architecture](../architecture.md).
+them, and explore them through your **Agent Lens**. [PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15) then made the repo
+the **Trust Graph monorepo**, built on **one pure Rust core with three thin
+wrappers**: the `trust` CLI, a WebAssembly package (browsers, Workers, Convex
+queries) and a native Node module (Node, Convex Node actions). See
+[architecture](../architecture.md).
 
 **What's missing:** nothing is published yet, and atoms only live where you
 put them. The next big steps are **publishing the packages** so CoreNexus and
 others can use them, then **sharing** atoms between people.
 
 **This repo is the Trust Graph monorepo.** Every Trust Graph project lives
-here: Rust first, TypeScript where it fits, with all protocol logic in one
-Rust core. It will be renamed to `trustgraph/trustgraph`.
+here: Rust crates in `crates/*`, TypeScript packages in `packages/*` (pnpm),
+with all protocol logic in one Rust core. It will be renamed to
+`trustgraph/trustgraph`.
 
 **Next steps, in order:**
 
-0. **Become the monorepo.** Bring in the protocol docs and the JSON-LD schema
-   from their separate repos, archive the old ones, and rename this repo to
-   `trustgraph/trustgraph`.
+0. **Finish the monorepo.** The layout is done. Still to do: bring in the
+   protocol docs and the JSON-LD schema from their separate repos, archive
+   the old ones, and rename this repo to `trustgraph/trustgraph`.
 1. **Lock the data format.** Publish the JSON-LD context and JSON Schema at
-   `trustgraph.net`, and freeze the atom and credential shapes as v1.
+   `trustgraph.net`, freeze the atom and credential shapes as v1, and add
+   exports to other reputation formats (IETF Reputons).
 2. **Release and publish.** Prebuilt `trust` binaries (cargo-dist, Homebrew),
    the npm packages (`@trustgraph/trustgraph` per-platform via napi-rs, and
    `@trustgraph/trustgraph-wasm`), and the crates. Prove the WebAssembly
@@ -71,6 +74,11 @@ Everything below this line is supporting detail.
     (archived): `trust claim`, `trust get`, `trust map`.
   - [`trustgraph/trustgraph-schema`](https://github.com/trustgraph/trustgraph-schema):
     the 2017 `TrustClaim.jsonld` context.
+- **Early drafts** [#9](https://github.com/trustgraph/trustgraph-rust-cli/pull/9) and [#10](https://github.com/trustgraph/trustgraph-rust-cli/pull/10) (2022–23) sketched `trust claim` and
+  `trust graph` argument parsing. The code is superseded by `trust`, but three
+  ideas carry forward: exports to other formats (IETF Reputons, Phase 1),
+  IPFS as a publishing target (Phase 3), and value filters plus a per-hop
+  "falloff" view for the lens (Phase 4).
 - **trustgraph.net** and the
   [FOSDEM 2022 talk](https://archive.fosdem.org/2022/schedule/event/trustgraphs/)
   describe Agents, the **Agent Lens**, the **Trust Cascade**, and trust
@@ -87,12 +95,15 @@ Everything below this line is supporting detail.
 | W3C VC 2.0 + `eddsa-jcs-2022` sign/verify (passes the spec's test vectors) | ✅ |
 | Local append-only store, verified on the way in | ✅ |
 | Agent Lens / Trust Cascade, topic filters, rollups | ✅ |
-| CI (3 OSes, MSRV, clippy pedantic, rustdoc), Dependabot, Apache-2.0 | ✅ |
+| CI (3 OSes, MSRV, clippy pedantic, rustdoc), Dependabot, Apache-2.0 ([PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11)) | ✅ |
 | Pure `trustgraph-core` (no I/O, enforced in CI) + shared JSON `api` ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
-| `@trustgraph/trustgraph-wasm`: web and Node builds, 547 KiB ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ built and tested, not published |
+| Monorepo: Cargo workspace (`crates/*`), pnpm workspace (`packages/*`), Rust-first language policy ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
+| Optional `random` feature: `Keypair::generate` / `generateKeypair()`, off in the core by default ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
+| `@trustgraph/trustgraph-wasm`: web and Node builds, 540 KiB ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ built and tested, not published |
 | `@trustgraph/trustgraph`: napi-rs, tested on Linux, macOS, Windows ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ built and tested, not published |
 | Shared TypeScript types; one smoke test across all JS builds ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 | `lens` on 100k atoms (Node 24 LTS): 0.54 s WebAssembly, 0.43 s native ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
+| CI: purity check, WebAssembly size budget, native addon on 3 OSes, latest Node LTS plus Node 22 ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 
 ## Design principles
 
@@ -122,10 +133,11 @@ Everything below this line is supporting detail.
 Each phase is a few small PRs, and is done only when its acceptance criteria
 pass in CI.
 
-### 0. Become the monorepo
+### 0. Finish the monorepo
 
 One repository for every Trust Graph project, so the core and everything
-built on it change together, in one PR and one CI run.
+built on it change together, in one PR and one CI run. The layout and
+language policy shipped in [PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15); what remains is bringing the other repos in.
 
 | Today | Moves to | Then |
 |---|---|---|
@@ -136,7 +148,7 @@ built on it change together, in one PR and one CI run.
 
 - Import with history (`git subtree add` or `git filter-repo`), so blame and
   past discussion survive.
-- Layout rules: Rust crates in `crates/*` (one Cargo workspace), TypeScript
+- Layout (done): Rust crates in `crates/*` (one Cargo workspace), TypeScript
   packages in `packages/*` (one pnpm workspace), docs in `doc/`. TypeScript
   calls the core through the WebAssembly or native package and never
   re-implements protocol logic.
@@ -152,6 +164,8 @@ built on it change together, in one PR and one CI run.
   decided value range.
 - Add golden files of real atoms and credentials to the repo; CI fails if
   the bytes ever change.
+- `trust convert --to reputon`: export atoms as IETF Reputons (RFC 7071), so
+  existing reputation systems can read them (an idea from the early drafts).
 - **Acceptance:** an off-the-shelf VC library (e.g. Digital Bazaar's
   `@digitalbazaar/vc` with the `eddsa-jcs-2022` suite) verifies a credential
   signed by `trust`.
@@ -186,6 +200,8 @@ built on it change together, in one PR and one CI run.
   verify every atom before storing it. Use ETags so repeat pulls are cheap.
 - Optional discovery via `/.well-known/trust/atoms.ndjson`, plus `did:web` so
   an organization can sign with its own domain.
+- Next transport, if there is demand: IPFS (`trust publish --to ipfs`). Atom
+  IDs are already SHA2-256 multihashes, the same as IPFS's.
 - **Acceptance:** two machines exchange atoms through GitHub Pages, and each
   sees the other in `trust lens`.
 
@@ -195,6 +211,8 @@ built on it change together, in one PR and one CI run.
   "prompts that enforce things"), using `dialoguer`.
 - `--format table` for humans; JSON stays the default when piped.
 - `trust lens --format dot|mermaid` to draw your trust graph.
+- `trust lens --min-value / --max-value` filters, and `--explain` to show how
+  much trust each hop passed along (the "falloff" idea from the early drafts).
 - Named contacts (`trust contact add bob did:key:…`) so you don't paste DIDs.
 
 ### 5. Harden

@@ -1,0 +1,32 @@
+[package]
+name = "trustgraph-wasm"
+description = "WebAssembly build of trustgraph-core, for browsers, Cloudflare Workers, Deno and Convex queries"
+readme = "README.md"
+keywords = ["trust", "reputation", "wasm", "did", "verifiable-credentials"]
+categories = ["wasm", "cryptography"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+trustgraph-core = { workspace = true, features = ["random"] }
+
+serde.workspace = true
+serde_json.workspace = true
+serde-wasm-bindgen.workspace = true
+wasm-bindgen.workspace = true
+
+# Randomness for `generateKeypair` comes from `crypto.getRandomValues`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true, features = ["wasm_js"] }
+
+[lints]
+workspace = true

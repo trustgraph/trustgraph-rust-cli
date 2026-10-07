@@ -8,6 +8,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Its ref is the Rust toolchain (`@stable`, `@1.85` for the MSRV job),
+      # not an action version, so "upgrading" it would change what we test.
+      - dependency-name: dtolnay/rust-toolchain
   - package-ecosystem: npm  # also covers pnpm-lock.yaml
     directory: /
     schedule:

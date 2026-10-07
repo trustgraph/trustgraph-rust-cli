@@ -12,7 +12,6 @@ use trustgraph_core::{Keypair, LensOptions, Query, Record, TrustAtom, TrustGraph
 use crate::cli::{AtomArgs, Cli, Command, ConvertArgs, Format, InputArgs, KeyCommand, LensArgs, QueryArgs, SignArgs};
 use crate::home::Home;
 use crate::io::{Output, read_json};
-use crate::random;
 
 /// Whether the command succeeded. `Failed` means the command ran, but its
 /// answer was "no" (e.g. a signature did not verify).
@@ -59,7 +58,7 @@ fn now() -> Timestamp {
 fn key<W: Write>(home: &Home, cmd: KeyCommand, out: &mut Output<W>) -> Result<Outcome> {
     match cmd {
         KeyCommand::New { name, force } => {
-            let keypair = Keypair::from_seed(&random::bytes()?);
+            let keypair = Keypair::generate()?;
             home.save_key(&name, &keypair, force)?;
             out.json(&json!({ "name": name, "did": keypair.did() }))?;
         }

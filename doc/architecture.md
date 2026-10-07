@@ -42,7 +42,7 @@ pass everything in:
 
 | The core needs | Callers supply it |
 |---|---|
-| Randomness (key seeds) | 32 random bytes: `getrandom` in the CLI, `crypto.getRandomValues` in JavaScript |
+| Randomness (key seeds) | 32 random bytes, **or** the opt-in `random` feature (see below) |
 | The current time (signing, rollups) | An RFC 3339 string or `jiff::Timestamp` |
 | Data to score | Atoms and credentials as values: from files (CLI), database rows (servers), IndexedDB (browsers) |
 
@@ -53,10 +53,18 @@ Two things follow from this:
   including signatures (Ed25519 is deterministic). That is what reactive
   queries require (Convex re-runs queries and caches their results).
 
+**Optional randomness.** The `random` cargo feature (off by default, on in all
+three wrappers) adds `Keypair::generate` and `generateKeypair()`, using the OS
+random number generator, or `crypto.getRandomValues` in WebAssembly. It is the
+one deliberate exception, kept in `src/random.rs`. Generated keys are not
+deterministic, so generate them in a client or an action, never inside a
+reactive query. Passing your own seed to `keypairFromSeed` always works.
+
 `scripts/check-core-purity.sh` enforces the rule in CI. It fails if the core's
 source uses `std::fs`, `std::net`, `std::env`, `Timestamp::now`, `getrandom`
-and the like, or if its dependency tree gains `getrandom`, `rand`, `tokio`,
-`libc` or an HTTP client.
+and the like (outside the feature-gated `src/random.rs`), or if its default
+dependency tree gains `getrandom`, `rand`, `tokio`, `libc` or an HTTP client.
+CI also builds the core alone with default features.
 
 ## One API, three wrappers
 
@@ -66,7 +74,8 @@ between them:
 
 | Function | Purpose |
 |---|---|
-| `keypairFromSeed(seed)` | Identity (`did:key`) from 32 random bytes |
+| `generateKeypair()` | New identity (`did:key`) from a secure random source; the only non-deterministic function |
+| `keypairFromSeed(seed)` | Identity (`did:key`) from a 32-byte seed you supply |
 | `parseAtom(item)` | Validate an atom, or extract it from a credential |
 | `atomId(item)` | Content ID (`Qm…`) |
 | `canonicalAtom(item)` | Canonical JSON (RFC 8785), exactly as hashed |
@@ -87,7 +96,7 @@ the packages are proven to behave identically.
 | Need | Use | Why |
 |---|---|---|
 | Trust scores inside live, reactive queries (e.g. a Convex query, so the UI updates on its own) | **WebAssembly** | Native addons can't run in Convex's default runtime; WebAssembly can, and is deterministic |
-| Browsers, Cloudflare Workers, Deno | **WebAssembly** | Runs anywhere WebAssembly runs; 538 KiB (225 KiB gzipped) |
+| Browsers, Cloudflare Workers, Deno | **WebAssembly** | Runs anywhere WebAssembly runs; 540 KiB (226 KiB gzipped) |
 | Heavy batch work: full-graph recomputes, crawling, mass verification | **Native** in a Node process or Convex Node action, or the **CLI** outside Convex writing results back over HTTP | Faster than WebAssembly (up to 3–4× on verification); more memory headroom |
 | People, scripts and other projects | **CLI** | No JavaScript or Convex involved |
 
@@ -118,7 +127,7 @@ filter, averaged over two runs. CI prints the same benchmark on every run:
 | `lens`, 10,000 atoms | 51 ms | 35 ms |
 | `lens`, 100,000 atoms | 0.54 s | 0.43 s |
 | `verify`, one credential | 0.26 ms | 0.07 ms |
-| Package size | 538 KiB wasm (225 KiB gzipped) | 1.2 MB (Linux x64) |
+| Package size | 540 KiB wasm (226 KiB gzipped) | 1.2 MB (Linux x64) |
 
 Against Convex's limits for queries and mutations (1 s, 64 MiB, 32 MiB
 bundle): graphs up to tens of thousands of atoms fit comfortably. Beyond about

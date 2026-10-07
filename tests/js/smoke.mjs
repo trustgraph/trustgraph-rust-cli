@@ -23,7 +23,9 @@ if (path.endsWith(".js") && path.includes("/web/")) {
 
 assert.match(tg.version(), /^\d+\.\d+\.\d+/);
 
-const alice = tg.keypairFromSeed(new Uint8Array(randomBytes(32)));
+const alice = tg.generateKeypair();
+assert.notEqual(tg.generateKeypair().did, alice.did);
+assert.deepEqual(tg.keypairFromSeed(new Uint8Array(32).fill(1)), tg.keypairFromSeed(new Uint8Array(32).fill(1)));
 const bob = tg.keypairFromSeed(randomBytes(32));
 assert.match(alice.did, /^did:key:z6Mk/);
 assert.throws(() => tg.keypairFromSeed(randomBytes(31)), /32 bytes/);

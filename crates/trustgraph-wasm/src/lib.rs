@@ -48,6 +48,17 @@ pub fn keypair_from_seed(seed: &[u8]) -> JsResult<JsValue> {
     to_js(&core(api::keypair_from_seed(seed))?)
 }
 
+/// Generates a new identity using `crypto.getRandomValues`. Not
+/// deterministic: don't call it inside a reactive query.
+///
+/// # Errors
+///
+/// Throws if no secure random source is available.
+#[wasm_bindgen(js_name = generateKeypair)]
+pub fn generate_keypair() -> JsResult<JsValue> {
+    to_js(&core(api::generate_keypair())?)
+}
+
 /// Validates an atom (or extracts it from a credential) and returns it.
 ///
 /// # Errors

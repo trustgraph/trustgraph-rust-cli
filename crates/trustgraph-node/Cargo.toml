@@ -20,7 +20,7 @@ test = false
 doctest = false
 
 [dependencies]
-trustgraph-core.workspace = true
+trustgraph-core = { workspace = true, features = ["random"] }
 
 napi.workspace = true
 napi-derive.workspace = true

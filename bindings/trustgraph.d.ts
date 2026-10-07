@@ -84,7 +84,9 @@ export interface LensEntry {
 export type Item = TrustAtomInput | Credential;
 
 export function version(): string;
-/** Derives an identity from 32 random bytes, e.g. `crypto.getRandomValues(new Uint8Array(32))`. */
+/** Generates a new identity from a secure random source. Not deterministic: call it in a client or action, not inside a reactive query. */
+export function generateKeypair(): KeyInfo;
+/** Derives an identity from a 32-byte seed you supply (deterministic). */
 export function keypairFromSeed(seed: Uint8Array): KeyInfo;
 export function parseAtom(input: Item): TrustAtom;
 /** Content ID (`Qm…`). */

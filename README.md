@@ -128,13 +128,14 @@ that topic is followed. Details are in [`graph.rs`](crates/trustgraph-core/src/g
 ### Rust
 
 The protocol lives in [`trustgraph-core`](crates/trustgraph-core). It does no
-I/O at all: you pass in data, seeds and timestamps, and get data back.
+I/O at all: you pass in data, seeds and timestamps, and get data back. The
+optional `random` feature can generate keys for you.
 
 ```rust
 use trustgraph_core::{credential, Keypair, LensOptions, TrustAtom, TrustGraph};
 
 fn main() -> Result<(), trustgraph_core::Error> {
-    let alice = Keypair::from_seed(&[7; 32]); // use 32 random bytes in practice
+    let alice = Keypair::from_seed(&[7; 32]); // or Keypair::generate() with the `random` feature
     let atom = TrustAtom::new(alice.did().to_string(), "https://sushi.example")
         .with_content("sushi")
         .with_value("0.9".parse()?);
@@ -155,7 +156,7 @@ Both npm packages have the same API ([types](bindings/trustgraph.d.ts)):
 ```ts
 import * as tg from "@trustgraph/trustgraph-wasm"; // or "@trustgraph/trustgraph" (native)
 
-const me = tg.keypairFromSeed(crypto.getRandomValues(new Uint8Array(32)));
+const me = tg.generateKeypair(); // or tg.keypairFromSeed(yourOwn32Bytes)
 const credential = tg.signAtom(
   { source: me.did, target: "https://sushi.example", content: "sushi", value: 0.9 },
   me.secretKeyMultibase,

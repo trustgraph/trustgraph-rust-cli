@@ -4,7 +4,8 @@ import type * as TG from "../../bindings/trustgraph";
 
 declare const tg: typeof TG;
 
-const me: TG.KeyInfo = tg.keypairFromSeed(crypto.getRandomValues(new Uint8Array(32)));
+const me: TG.KeyInfo = tg.generateKeypair();
+const fromSeed: TG.KeyInfo = tg.keypairFromSeed(crypto.getRandomValues(new Uint8Array(32)));
 const credential: TG.Credential = tg.signAtom(
   { source: me.did, target: "https://sushi.example", content: "sushi", value: 0.9 },
   me.secretKeyMultibase,
@@ -20,4 +21,4 @@ const id: string = tg.atomId(rollups[0]!);
 // @ts-expect-error depth must be a number
 tg.lens([], me.did, { depth: "3" });
 
-export { atom, best, id };
+export { atom, best, id, fromSeed };

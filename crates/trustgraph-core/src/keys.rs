@@ -23,9 +23,8 @@ pub struct Keypair(SigningKey);
 impl Keypair {
     /// Builds a key pair from a 32-byte Ed25519 seed.
     ///
-    /// The core does no I/O, so it never generates randomness itself. Callers
-    /// supply a seed from a secure source: the OS (`getrandom`) in the CLI and
-    /// native module, `crypto.getRandomValues` in JavaScript.
+    /// Callers supply a seed from a secure source, or enable the `random`
+    /// feature and use `Keypair::generate`.
     #[must_use]
     pub fn from_seed(seed: &[u8; 32]) -> Self {
         Self(SigningKey::from_bytes(seed))

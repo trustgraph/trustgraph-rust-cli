@@ -15,7 +15,8 @@
 //!   wrappers all expose.
 //!
 //! The core does **no I/O**: no files, network, clock or randomness. Callers
-//! pass in seeds, timestamps and data, and get data back. That keeps it
+//! pass in seeds, timestamps and data, and get data back. The one opt-in
+//! exception is the `random` feature, which adds [`Keypair::generate`]. That keeps it
 //! portable (native, WebAssembly, embedded in other runtimes) and
 //! deterministic (it can run inside reactive database queries).
 //!
@@ -40,6 +41,8 @@ pub mod error;
 pub mod graph;
 pub mod id;
 pub mod keys;
+#[cfg(feature = "random")]
+pub mod random;
 pub mod record;
 pub mod value;
 

@@ -17,12 +17,16 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-trustgraph-core.workspace = true
+trustgraph-core = { workspace = true, features = ["random"] }
 
 serde.workspace = true
 serde_json.workspace = true
 serde-wasm-bindgen.workspace = true
 wasm-bindgen.workspace = true
+
+# Randomness for `generateKeypair` comes from `crypto.getRandomValues`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true, features = ["wasm_js"] }
 
 [lints]
 workspace = true

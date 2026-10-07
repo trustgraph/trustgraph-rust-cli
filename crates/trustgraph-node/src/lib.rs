@@ -47,6 +47,12 @@ pub fn keypair_from_seed(seed: Uint8Array) -> Result<Value> {
     json(&core(api::keypair_from_seed(&seed))?)
 }
 
+/// Generates a new identity from the OS random number generator.
+#[napi]
+pub fn generate_keypair() -> Result<Value> {
+    json(&core(api::generate_keypair())?)
+}
+
 /// Validates an atom (or extracts it from a credential) and returns it.
 #[napi]
 pub fn parse_atom(input: Value) -> Result<Value> {

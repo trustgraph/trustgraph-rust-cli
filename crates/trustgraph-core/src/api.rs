@@ -7,7 +7,8 @@
 //!
 //! Like the rest of the core, nothing here does I/O: no files, network,
 //! clock or randomness. Callers pass in seeds and timestamps, and keep
-//! records wherever they like. Every function is deterministic, which is
+//! records wherever they like. Every function is deterministic (except
+//! `generate_keypair`, from the opt-in `random` feature), which is
 //! what lets the WebAssembly build run inside reactive database queries
 //! (such as Convex queries and mutations).
 
@@ -49,6 +50,17 @@ pub fn keypair_from_seed(seed: &[u8]) -> Result<KeyInfo> {
         public_key_multibase: keypair.public().to_multibase(),
         secret_key_multibase: keypair.to_secret_multibase(),
     })
+}
+
+/// Generates a new identity from a secure random seed. Not deterministic:
+/// don't call it inside a reactive query.
+///
+/// # Errors
+///
+/// Returns [`Error::Random`] if no secure random source is available.
+#[cfg(feature = "random")]
+pub fn generate_keypair() -> Result<KeyInfo> {
+    keypair_from_seed(&crate::random::bytes::<32>()?)
 }
 
 /// Parses an atom, or extracts it from a credential (without checking the
@@ -257,6 +269,14 @@ mod tests {
         assert!(keypair_from_seed(&[1; 31]).is_err());
         let json = serde_json::to_value(alice()).unwrap();
         assert!(json.get("secretKeyMultibase").is_some(), "camelCase for JavaScript");
+    }
+
+    #[cfg(feature = "random")]
+    #[test]
+    fn generate_keypair_gives_fresh_identities() {
+        let a = generate_keypair().unwrap();
+        assert!(a.did.starts_with("did:key:z6Mk"));
+        assert_ne!(a, generate_keypair().unwrap());
     }
 
     #[test]

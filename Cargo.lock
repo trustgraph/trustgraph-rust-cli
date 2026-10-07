@@ -533,8 +533,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi 6.0.0",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1297,7 +1299,6 @@ dependencies = [
  "clap",
  "clap_complete",
  "directories",
- "getrandom 0.4.3",
  "jiff",
  "predicates",
  "serde",
@@ -1312,6 +1313,7 @@ version = "0.1.0"
 dependencies = [
  "bs58",
  "ed25519-dalek",
+ "getrandom 0.4.3",
  "hex",
  "jiff",
  "proptest",
@@ -1340,6 +1342,7 @@ dependencies = [
 name = "trustgraph-wasm"
 version = "0.1.0"
 dependencies = [
+ "getrandom 0.4.3",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

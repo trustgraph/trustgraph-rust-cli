@@ -30,6 +30,11 @@ pub enum Error {
     #[error("verification failed: {0}")]
     Verification(String),
 
+    /// No secure random source was available (`random` feature only).
+    #[cfg(feature = "random")]
+    #[error("random number generator failed: {0}")]
+    Random(String),
+
     /// An argument to an API call was out of range or malformed.
     #[error("invalid input: {0}")]
     InvalidInput(String),

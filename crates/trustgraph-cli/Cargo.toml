@@ -18,13 +18,12 @@ name = "trust"
 path = "src/main.rs"
 
 [dependencies]
-trustgraph-core.workspace = true
+trustgraph-core = { workspace = true, features = ["random"] }
 
 anyhow.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 directories.workspace = true
-getrandom.workspace = true
 jiff = { workspace = true, features = ["std"] }
 serde.workspace = true
 serde_json.workspace = true

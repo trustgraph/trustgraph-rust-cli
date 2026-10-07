@@ -1,0 +1,45 @@
+[package]
+name = "trustgraph-node"
+description = "Native Node.js bindings for trustgraph-core (napi-rs), for Node and Convex Node actions"
+readme = "README.md"
+keywords = ["trust", "reputation", "napi", "did", "verifiable-credentials"]
+categories = ["api-bindings", "cryptography"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+# A napi addon only links inside a Node process; it is tested from Node.
+test = false
+doctest = false
+
+[dependencies]
+trustgraph-core = { workspace = true, features = ["random"] }
+
+napi.workspace = true
+napi-derive.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+napi-build.workspace = true
+
+# Same as the workspace lints, except `unsafe_code` is `deny` rather than
+# `forbid`: the `#[napi]` macro emits FFI glue under `#[allow(unsafe_code)]`,
+# which `forbid` would reject. Hand-written unsafe code is still an error.
+[lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "warn"
+module_name_repetitions = "allow"

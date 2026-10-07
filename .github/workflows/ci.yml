@@ -1,0 +1,107 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  lint:
+    name: Format, Clippy, Docs & Purity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked
+      - name: Core alone, default features (no randomness)
+        run: cargo clippy -p trustgraph-core --all-targets --locked
+      - run: cargo doc --workspace --no-deps --locked
+      - name: trustgraph-core does no I/O
+        run: scripts/check-core-purity.sh
+
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --locked
+
+  msrv:
+    name: MSRV (1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.85
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --locked
+
+  wasm:
+    name: WebAssembly package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: wasm-bindgen version from Cargo.lock
+        id: wasm-bindgen
+        run: echo "version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+      - uses: pnpm/action-setup@v4  # version from packageManager in package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc  # latest LTS
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: cargo clippy --target wasm32-unknown-unknown -p trustgraph-core -p trustgraph-wasm --locked
+      - run: scripts/build-wasm-package.sh
+      - run: node tests/js/smoke.mjs target/npm/trustgraph-wasm/node/trustgraph_wasm.cjs
+      - run: node tests/js/smoke.mjs target/npm/trustgraph-wasm/web/trustgraph_wasm.js
+      - name: TypeScript types
+        run: pnpm run typecheck
+      - name: Benchmark (informational)
+        run: node tests/js/bench.mjs target/npm/trustgraph-wasm/node/trustgraph_wasm.cjs
+
+  node:
+    name: Native Node addon (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4  # version from packageManager in package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc  # latest LTS
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build:node
+      - run: pnpm run test:node
+      - name: Oldest supported Node (22)
+        if: runner.os == 'Linux'
+        run: npx -y node@22 tests/js/smoke.mjs crates/trustgraph-node/index.js

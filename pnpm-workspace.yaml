@@ -1,0 +1,5 @@
+# Trust Graph monorepo: JavaScript and TypeScript packages.
+# Rust crates are in the Cargo workspace (Cargo.toml, crates/*).
+packages:
+  - crates/trustgraph-node
+  - packages/*

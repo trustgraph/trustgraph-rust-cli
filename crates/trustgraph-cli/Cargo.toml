@@ -1,0 +1,38 @@
+[package]
+name = "trustgraph-cli"
+description = "`trust`: the Trust Graph command line interface"
+readme = "../../README.md"
+keywords = ["trust", "reputation", "did", "cli", "trustgraph"]
+categories = ["command-line-utilities", "cryptography"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "trust"
+path = "src/main.rs"
+
+[dependencies]
+trustgraph-core = { workspace = true, features = ["random"] }
+
+anyhow.workspace = true
+clap.workspace = true
+clap_complete.workspace = true
+directories.workspace = true
+jiff = { workspace = true, features = ["std"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+predicates.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

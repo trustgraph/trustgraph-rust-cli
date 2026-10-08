@@ -12,6 +12,8 @@ The published, machine-readable side of the [Trust Graph protocol](../doc/protoc
 
 Golden examples of every format are in [`test-vectors/v1/`](../test-vectors/v1).
 
+[`legacy-2017/`](legacy-2017) holds the 2017 `TrustClaim` context, imported with its history from `trustgraph/trustgraph-schema`. It is historical: v1 replaces it.
+
 ## The context is immutable
 
 `https://trustgraph.net/ns/v1` must always serve exactly the bytes of

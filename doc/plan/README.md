@@ -104,6 +104,7 @@ Everything below this line is supporting detail.
 | Shared TypeScript types; one smoke test across all JS builds ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 | `lens` on 100k atoms (Node 24 LTS): 0.54 s WebAssembly, 0.43 s native ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 | CI: purity check, WebAssembly size budget, native addon on 3 OSes, latest Node LTS plus Node 22 ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
+| Release pipeline: dist binaries and installers, Homebrew tap, release-plz, npm publishing (native + WebAssembly), cargo-deny, coverage ([PR #24](https://github.com/trustgraph/trustgraph-rust-cli/pull/24)) | ✅ ready; first release waits on secrets ([releasing](../releasing.md)) |
 
 ## Design principles
 

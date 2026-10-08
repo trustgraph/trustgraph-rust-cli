@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
+use serde_json::Value as Json;
 use trustgraph_core::{Did, Keypair};
 
 use crate::store::Store;
@@ -14,6 +15,21 @@ use crate::store::Store;
 #[derive(Debug, Clone)]
 pub struct Home {
     dir: PathBuf,
+}
+
+/// A DID identity other than the key's own `did:key`: a `did:webvh` (with
+/// its log) or a `did:web` (with its document). Stored in
+/// `dids/<key name>.json`; the key of the same name signs for it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Identity {
+    pub did: String,
+    /// The did:webvh log (`did.jsonl`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub did_log: Option<String>,
+    /// The did:web document (`did.json`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub did_document: Option<Json>,
 }
 
 /// A key as stored on disk.
@@ -65,30 +81,70 @@ impl Home {
         if path.exists() && !force {
             bail!("key `{name}` already exists (use --force to replace it)");
         }
-        fs::create_dir_all(self.keys_dir()).with_context(|| format!("creating {}", self.keys_dir().display()))?;
-        let file =
-            KeyFile { name: name.to_owned(), did: keypair.did(), secret_key_multibase: keypair.to_secret_multibase() };
-        let mut json = serde_json::to_string_pretty(&file)?;
-        json.push('\n');
-        write_private(&path, json.as_bytes()).with_context(|| format!("writing {}", path.display()))
+        save_key_file(&path, name, keypair)
     }
 
     /// Loads a key by name.
     pub fn load_key(&self, name: &str) -> Result<Keypair> {
-        let path = self.key_path(name);
-        let json = match fs::read_to_string(&path) {
-            Ok(json) => json,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                bail!("no key named `{name}`; create one with `trust key new {name}`")
-            }
-            Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
-        };
-        let file: KeyFile = serde_json::from_str(&json).with_context(|| format!("parsing {}", path.display()))?;
-        let keypair = Keypair::from_secret_multibase(&file.secret_key_multibase)?;
-        if keypair.did() != file.did {
-            bail!("{} is corrupt: its DID does not match its secret key", path.display());
+        match load_key_file(&self.key_path(name))? {
+            Some(keypair) => Ok(keypair),
+            None => bail!("no key named `{name}`; create one with `trust key new {name}`"),
         }
-        Ok(keypair)
+    }
+
+    pub fn dids_dir(&self) -> PathBuf {
+        self.dir.join("dids")
+    }
+
+    pub fn cache_dir(&self) -> PathBuf {
+        self.dir.join("cache")
+    }
+
+    fn identity_path(&self, name: &str) -> PathBuf {
+        self.dids_dir().join(format!("{name}.json"))
+    }
+
+    /// The did:web / did:webvh identity of key `name`, if it has one.
+    pub fn load_identity(&self, name: &str) -> Result<Option<Identity>> {
+        let path = self.identity_path(name);
+        match fs::read_to_string(&path) {
+            Ok(json) => Ok(Some(serde_json::from_str(&json).with_context(|| format!("parsing {}", path.display()))?)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e).with_context(|| format!("reading {}", path.display())),
+        }
+    }
+
+    pub fn save_identity(&self, name: &str, identity: &Identity) -> Result<()> {
+        fs::create_dir_all(self.dids_dir()).with_context(|| format!("creating {}", self.dids_dir().display()))?;
+        let path = self.identity_path(name);
+        let mut json = serde_json::to_string_pretty(identity)?;
+        json.push('\n');
+        fs::write(&path, json).with_context(|| format!("writing {}", path.display()))
+    }
+
+    /// A key kept for an identity (a pre-rotation key, or a retired one):
+    /// `dids/<stem>.key.json`.
+    fn identity_key_path(&self, stem: &str) -> PathBuf {
+        self.dids_dir().join(format!("{stem}.key.json"))
+    }
+
+    pub fn save_identity_key(&self, stem: &str, keypair: &Keypair) -> Result<()> {
+        fs::create_dir_all(self.dids_dir()).with_context(|| format!("creating {}", self.dids_dir().display()))?;
+        save_key_file(&self.identity_key_path(stem), stem, keypair)
+    }
+
+    pub fn load_identity_key(&self, stem: &str) -> Result<Option<Keypair>> {
+        load_key_file(&self.identity_key_path(stem))
+    }
+
+    pub fn remove_identity_key(&self, stem: &str) -> Result<()> {
+        let path = self.identity_key_path(stem);
+        match fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                Err(e).with_context(|| format!("removing {}", path.display()))
+            }
+            _ => Ok(()),
+        }
     }
 
     /// Names and DIDs of all keys, sorted by name.
@@ -109,6 +165,31 @@ impl Home {
         keys.sort();
         Ok(keys)
     }
+}
+
+fn save_key_file(path: &Path, name: &str, keypair: &Keypair) -> Result<()> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    let file =
+        KeyFile { name: name.to_owned(), did: keypair.did(), secret_key_multibase: keypair.to_secret_multibase() };
+    let mut json = serde_json::to_string_pretty(&file)?;
+    json.push('\n');
+    write_private(path, json.as_bytes()).with_context(|| format!("writing {}", path.display()))
+}
+
+fn load_key_file(path: &Path) -> Result<Option<Keypair>> {
+    let json = match fs::read_to_string(path) {
+        Ok(json) => json,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e).with_context(|| format!("reading {}", path.display())),
+    };
+    let file: KeyFile = serde_json::from_str(&json).with_context(|| format!("parsing {}", path.display()))?;
+    let keypair = Keypair::from_secret_multibase(&file.secret_key_multibase)?;
+    if keypair.did() != file.did {
+        bail!("{} is corrupt: its DID does not match its secret key", path.display());
+    }
+    Ok(Some(keypair))
 }
 
 /// Writes a file readable only by its owner (on Unix).

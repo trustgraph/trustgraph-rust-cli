@@ -25,6 +25,11 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub pretty: bool,
 
+    /// Never use the network: resolve did:web and did:webvh issuers from the
+    /// cache only
+    #[arg(long, global = true, env = "TRUST_OFFLINE")]
+    pub offline: bool,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -49,7 +54,8 @@ pub enum Command {
     /// Sign Trust Atoms (from a file or stdin) as Verifiable Credentials
     Sign(SignArgs),
 
-    /// Verify signed Trust Atom credentials; exits 1 if any are invalid
+    /// Verify signed Trust Atom credentials; exits 1 if any are invalid.
+    /// did:web and did:webvh issuers are resolved over HTTPS (and cached)
     Verify(InputArgs),
 
     /// Print the content ID (a Qm… multihash) of atoms or credentials
@@ -67,6 +73,11 @@ pub enum Command {
     /// See the world through an agent's lens: their own ratings, plus the
     /// ratings of the agents they trust, cascading outward
     Lens(LensArgs),
+
+    /// Resolve DIDs, and create did:web and did:webvh identities (key
+    /// rotation, signing with your own domain)
+    #[command(subcommand)]
+    Did(DidCommand),
 
     /// Show where keys and data are kept
     Info,
@@ -111,6 +122,119 @@ pub enum KeyCommand {
         /// Replace an existing key with the same name
         #[arg(long)]
         force: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DidCommand {
+    /// Resolve a DID (did:key, did:web, did:webvh) to its DID document
+    Resolve(ResolveArgs),
+    /// Show the DID a key signs as: its did:webvh or did:web identity if it
+    /// has one, otherwise its did:key
+    Show {
+        /// Name of the key
+        #[arg(default_value = "default", value_parser = parse_key_name)]
+        name: String,
+    },
+    /// did:web: sign as your own domain (a did.json you host)
+    #[command(subcommand)]
+    Web(DidWebCommand),
+    /// did:webvh: did:web with a verifiable history, so keys can be rotated
+    #[command(subcommand)]
+    Webvh(DidWebvhCommand),
+}
+
+#[derive(Debug, Args)]
+pub struct ResolveArgs {
+    /// The DID to resolve
+    pub did: String,
+
+    /// Verify this did:webvh log (did.jsonl) instead of fetching it. It is
+    /// cached, so later offline verification can use it
+    #[arg(long, value_name = "FILE")]
+    pub log: Option<PathBuf>,
+
+    /// The did-witness.json that goes with --log
+    #[arg(long, value_name = "FILE", requires = "log")]
+    pub witness: Option<PathBuf>,
+
+    /// did:webvh: resolve the version with this versionId
+    #[arg(long, conflicts_with_all = ["version_number", "version_time"])]
+    pub version_id: Option<String>,
+
+    /// did:webvh: resolve this version number
+    #[arg(long, conflicts_with = "version_time")]
+    pub version_number: Option<u64>,
+
+    /// did:webvh: resolve the version in force at this time (RFC 3339)
+    #[arg(long)]
+    pub version_time: Option<Timestamp>,
+}
+
+#[derive(Debug, Args)]
+pub struct LocationArgs {
+    /// The domain that will host the DID, with an optional port
+    #[arg(long, value_name = "HOST[:PORT]")]
+    pub domain: String,
+
+    /// A path on the domain, e.g. `dids/alice` [default: /.well-known/]
+    #[arg(long)]
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DidWebCommand {
+    /// Make --key's identity a did:web, and write the did.json to publish
+    Create {
+        #[command(flatten)]
+        location: LocationArgs,
+        #[command(flatten)]
+        key: KeyArg,
+        /// Where to write did.json (`-` for stdout)
+        #[arg(short, long, default_value = "did.json")]
+        output: PathBuf,
+        /// Replace the key's existing did:web or did:webvh identity
+        #[arg(long)]
+        force: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub enum DidWebvhCommand {
+    /// Make --key's identity a did:webvh, and write the did.jsonl to publish
+    Create {
+        #[command(flatten)]
+        location: LocationArgs,
+        #[command(flatten)]
+        key: KeyArg,
+        /// Pre-rotation: commit now to the next key (kept in the trust home),
+        /// so a stolen current key can't take the DID over
+        #[arg(long)]
+        prerotate: bool,
+        /// Allow moving the DID to another domain later
+        #[arg(long)]
+        portable: bool,
+        /// Time of this version (RFC 3339) [default: now]
+        #[arg(long)]
+        version_time: Option<Timestamp>,
+        /// Where to write did.jsonl (`-` for stdout)
+        #[arg(short, long, default_value = "did.jsonl")]
+        output: PathBuf,
+        /// Replace the key's existing did:web or did:webvh identity
+        #[arg(long)]
+        force: bool,
+    },
+    /// Rotate to a new key: adds a version to the log (republish it). The
+    /// old key is retired; credentials it signed stay valid
+    Rotate {
+        #[command(flatten)]
+        key: KeyArg,
+        /// Time of this version (RFC 3339) [default: now]
+        #[arg(long)]
+        version_time: Option<Timestamp>,
+        /// Where to write did.jsonl (`-` for stdout)
+        #[arg(short, long, default_value = "did.jsonl")]
+        output: PathBuf,
     },
 }
 

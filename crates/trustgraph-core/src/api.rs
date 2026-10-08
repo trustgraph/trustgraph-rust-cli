@@ -15,7 +15,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
-use crate::{Error, Keypair, LensEntry, LensOptions, Result, TrustAtom, TrustGraph, credential};
+use crate::did::webvh::{self, VersionQuery};
+use crate::did::{self as dids, DidDocument};
+use crate::{Did, Error, Keypair, LensEntry, LensOptions, Result, TrustAtom, TrustGraph, credential};
 
 /// The core's version.
 #[must_use]
@@ -247,6 +249,101 @@ pub fn rollup(items: Vec<Json>, root: &str, request: &LensRequest, at: &str) -> 
     TrustGraph::rollup(root, &entries, &request.options()?, at)
 }
 
+/// Where a `did:web` DID document (`did.json`) or `did:webvh` log
+/// (`did.jsonl`) is published. Fetch it, then pass it to
+/// [`resolve_did_webvh`] or [`verify_with`].
+///
+/// # Errors
+///
+/// Fails if `did` is not a valid `did:web` or `did:webvh`.
+pub fn did_document_url(did: &str) -> Result<String> {
+    dids::web::document_url(did)
+}
+
+/// The DID document of a `did:key` (no network needed).
+///
+/// # Errors
+///
+/// Fails if `did` is not an Ed25519 `did:key`.
+pub fn resolve_did_key(did: &str) -> Result<Json> {
+    Ok(DidDocument::for_did_key(&did.parse::<Did>()?).to_json())
+}
+
+/// Options for [`resolve_did_webvh`]. All optional.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WebvhOptions {
+    /// The contents of `did-witness.json`, for DIDs that use witnesses.
+    pub did_witness: Option<String>,
+    /// Resolve the version with this `versionId`.
+    pub version_id: Option<String>,
+    /// Resolve the version with this number.
+    pub version_number: Option<u64>,
+    /// Resolve the version in force at this time (RFC 3339).
+    pub version_time: Option<String>,
+    /// The current time (RFC 3339), to reject entries dated in the future.
+    pub now: Option<String>,
+}
+
+fn timestamp(s: &str) -> Result<jiff::Timestamp> {
+    s.parse().map_err(|_| Error::InvalidInput(format!("`{s}` is not an RFC 3339 time")))
+}
+
+/// Verifies a `did:webvh` log (the contents of `did.jsonl`) and resolves
+/// the DID: `{didDocument, didDocumentMetadata}`.
+///
+/// # Errors
+///
+/// Fails if the log does not verify, or the requested version does not
+/// exist.
+pub fn resolve_did_webvh(did: &str, did_log: &str, options: &WebvhOptions) -> Result<webvh::Resolution> {
+    let now = options.now.as_deref().map(timestamp).transpose()?;
+    let log = webvh::verify_log(did, did_log, options.did_witness.as_deref(), now)?;
+    let query = match (&options.version_id, options.version_number, &options.version_time) {
+        (Some(id), _, _) => VersionQuery::Id(id.clone()),
+        (None, Some(n), _) => VersionQuery::Number(n),
+        (None, None, Some(t)) => VersionQuery::Time(timestamp(t)?),
+        (None, None, None) => VersionQuery::Latest,
+    };
+    log.resolve(&query)
+}
+
+/// Verifies a signed Trust Atom credential against its issuer's DID,
+/// resolved by the caller. `resolved` is either:
+///
+/// - the issuer's DID document (as fetched for `did:web`, or from
+///   [`resolve_did_key`]), or
+/// - `{didLog, didWitness?}`: the issuer's `did:webvh` log. The credential
+///   is checked against the version in force when it was signed (its
+///   proof's `created`), so it stays valid after the key is rotated.
+///
+/// Never fails: an invalid credential is reported in the result.
+#[must_use]
+pub fn verify_with(credential: &Json, resolved: &Json) -> Verification {
+    let document = || -> Result<DidDocument> {
+        let Some(log) = resolved.get("didLog") else { return DidDocument::from_json(resolved) };
+        let log = log.as_str().ok_or_else(|| Error::InvalidInput("`didLog` must be a string".into()))?;
+        let witness = match resolved.get("didWitness") {
+            None | Some(Json::Null) => None,
+            Some(w) => Some(w.as_str().ok_or_else(|| Error::InvalidInput("`didWitness` must be a string".into()))?),
+        };
+        let issuer = credential::from_credential(credential)?.source;
+        webvh::verify_log(&issuer, log, witness, None)?.document_at(dids::proof_created(credential))
+    };
+    let result =
+        document().and_then(|doc| dids::verify_atom_with(credential, &doc)).and_then(|atom| Ok((atom.id()?, atom)));
+    match result {
+        Ok((id, atom)) => Verification {
+            valid: true,
+            id: Some(id.to_string()),
+            issuer: Some(atom.source.clone()),
+            atom: Some(atom),
+            error: None,
+        },
+        Err(err) => Verification { valid: false, id: None, issuer: None, atom: None, error: Some(err.to_string()) },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -371,5 +468,57 @@ mod tests {
             assert_eq!(again, first);
         }
         assert_eq!(signed("x", "1"), signed("x", "1"), "Ed25519 signatures are deterministic");
+    }
+
+    #[test]
+    fn did_helpers() {
+        assert_eq!(did_document_url("did:web:example.com:alice").unwrap(), "https://example.com/alice/did.json");
+        assert!(did_document_url("did:key:z6Mk").is_err());
+        let doc = resolve_did_key(&alice().did).unwrap();
+        assert_eq!(doc["id"], alice().did.as_str());
+        assert!(resolve_did_key("did:web:example.com").is_err());
+
+        let credential = signed("https://sushi.example", "0.9");
+        assert!(verify_with(&credential, &doc).valid);
+        let bob = resolve_did_key(&keypair_from_seed(&[2; 32]).unwrap().did).unwrap();
+        let result = verify_with(&credential, &bob);
+        assert!(!result.valid);
+        assert!(result.error.unwrap().contains("issuer"));
+        assert!(!verify_with(&credential, &json!({ "didLog": 5 })).valid);
+    }
+
+    #[test]
+    fn webvh_identities_verify_across_rotations() {
+        let k1 = Keypair::from_seed(&[1; 32]);
+        let k2 = Keypair::from_seed(&[2; 32]);
+        let t = |s: &str| s.parse::<jiff::Timestamp>().unwrap();
+        let (did, log) = webvh::create_identity("example.com", &k1, &[], false, t("2026-01-01T00:00:00Z")).unwrap();
+        let first = webvh::verify_log(&did, &log, None, None).unwrap().document_at(None).unwrap();
+        let atom = TrustAtom::new(did.clone(), "https://sushi.example").with_value("0.5".parse().unwrap());
+        let old = dids::sign_atom_as(&atom, &k1, &first, t("2026-01-02T00:00:00Z")).unwrap();
+
+        let log = webvh::rotate_identity(&did, &log, &k1, &k2, None, t("2026-02-01T00:00:00Z")).unwrap();
+        let second = webvh::verify_log(&did, &log, None, None).unwrap().document_at(None).unwrap();
+        let new = dids::sign_atom_as(&atom, &k2, &second, t("2026-02-02T00:00:00Z")).unwrap();
+        let resolved = json!({ "didLog": log });
+        assert!(verify_with(&old, &resolved).valid, "signed before the rotation");
+        assert!(verify_with(&new, &resolved).valid);
+        assert_eq!(verify_with(&new, &resolved).issuer.as_deref(), Some(did.as_str()));
+
+        // The old key, used after the rotation, no longer counts.
+        let late = dids::sign_atom_as(&atom, &k1, &first, t("2026-03-01T00:00:00Z")).unwrap();
+        assert!(!verify_with(&late, &resolved).valid);
+        // `verify` alone can't resolve did:webvh.
+        assert!(!verify(&new).valid);
+
+        let options = WebvhOptions { version_number: Some(1), ..WebvhOptions::default() };
+        let resolution = resolve_did_webvh(&did, &log, &options).unwrap();
+        assert_eq!(resolution.did_document_metadata.version_number, 1);
+        let options: WebvhOptions = serde_json::from_value(json!({ "versionTime": "2026-02-15T00:00:00Z" })).unwrap();
+        assert_eq!(resolve_did_webvh(&did, &log, &options).unwrap().did_document_metadata.version_number, 2);
+        let too_early = WebvhOptions { now: Some("2026-01-15T00:00:00Z".into()), ..WebvhOptions::default() };
+        assert!(resolve_did_webvh(&did, &log, &too_early).is_err());
+        let bad_time = WebvhOptions { version_time: Some("soon".into()), ..WebvhOptions::default() };
+        assert!(resolve_did_webvh(&did, &log, &bad_time).is_err());
     }
 }

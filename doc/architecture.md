@@ -81,7 +81,11 @@ between them:
 | `canonicalAtom(item)` | Canonical JSON (RFC 8785), exactly as hashed |
 | `toCredential(atom)` | Unsigned W3C Verifiable Credential |
 | `signAtom(atom, secret, created)` | Signed credential (`eddsa-jcs-2022`) |
-| `verify(credential)` | `{valid, id, issuer, atom}` or `{valid: false, error}` |
+| `verify(credential)` | `{valid, id, issuer, atom}` or `{valid: false, error}` (`did:key` issuers) |
+| `didDocumentUrl(did)` | Where a `did:web` document or `did:webvh` log is published (callers fetch it) |
+| `resolveDidKey(did)` | The DID document of a `did:key` |
+| `resolveDidWebvh(did, didLog, options)` | Verify a `did:webvh` log and resolve the DID (any version) |
+| `verifyWith(credential, resolved)` | Verify against the issuer's fetched DID document or `{didLog}` ([identity](identity.md)) |
 | `lens(items, root, options)` | The Agent Lens / Trust Cascade |
 | `rollup(items, root, options, at)` | Lens results as atoms, ready to sign and share |
 

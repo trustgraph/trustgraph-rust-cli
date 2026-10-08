@@ -22,9 +22,9 @@ pub const TRUSTGRAPH_CONTEXT: &str = "https://trustgraph.net/ns/v1";
 /// The credential `type` for a signed Trust Atom.
 pub const TRUST_ATOM_CREDENTIAL: &str = "TrustAtomCredential";
 
-const PROOF_TYPE: &str = "DataIntegrityProof";
-const CRYPTOSUITE: &str = "eddsa-jcs-2022";
-const PROOF_PURPOSE: &str = "assertionMethod";
+pub(crate) const PROOF_TYPE: &str = "DataIntegrityProof";
+pub(crate) const CRYPTOSUITE: &str = "eddsa-jcs-2022";
+pub(crate) const PROOF_PURPOSE: &str = "assertionMethod";
 
 /// Converts an atom into an unsigned Verifiable Credential:
 /// `source` becomes the `issuer`, `target` the `credentialSubject.id`, and
@@ -230,7 +230,7 @@ pub fn verify(secured: &Json) -> Result<Did> {
 }
 
 /// `SHA-256(JCS(proof config)) || SHA-256(JCS(document))`.
-fn hash_data(proof_config: &Map<String, Json>, document: &Map<String, Json>) -> Result<Vec<u8>> {
+pub(crate) fn hash_data(proof_config: &Map<String, Json>, document: &Map<String, Json>) -> Result<Vec<u8>> {
     let mut data = Sha256::digest(canonical::to_string(proof_config)?.as_bytes()).to_vec();
     data.extend_from_slice(&Sha256::digest(canonical::to_string(document)?.as_bytes()));
     Ok(data)

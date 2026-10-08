@@ -15,7 +15,7 @@
 use napi::bindgen_prelude::Uint8Array;
 use napi_derive::napi;
 use serde_json::Value;
-use trustgraph_core::api::{self, LensRequest};
+use trustgraph_core::api::{self, LensRequest, WebvhOptions};
 
 type Result<T> = napi::Result<T>;
 
@@ -99,4 +99,32 @@ pub fn lens(items: Vec<Value>, root: String, options: Option<Value>) -> Result<V
 #[napi]
 pub fn rollup(items: Vec<Value>, root: String, options: Option<Value>, at: String) -> Result<Value> {
     json(&core(api::rollup(items, &root, &request(options)?, &at))?)
+}
+
+/// Where a `did:web` document or `did:webvh` log is published.
+#[napi]
+pub fn did_document_url(did: String) -> Result<String> {
+    core(api::did_document_url(&did))
+}
+
+/// The DID document of a `did:key`.
+#[napi]
+pub fn resolve_did_key(did: String) -> Result<Value> {
+    core(api::resolve_did_key(&did))
+}
+
+/// Verifies a `did:webvh` log and resolves the DID.
+#[napi]
+pub fn resolve_did_webvh(did: String, did_log: String, options: Option<Value>) -> Result<Value> {
+    let options: WebvhOptions = match options {
+        None | Some(Value::Null) => WebvhOptions::default(),
+        Some(value) => serde_json::from_value(value).map_err(|e| napi::Error::from_reason(format!("options: {e}")))?,
+    };
+    json(&core(api::resolve_did_webvh(&did, &did_log, &options))?)
+}
+
+/// Verifies a credential against its issuer's resolved DID.
+#[napi]
+pub fn verify_with(credential: Value, resolved: Value) -> Result<Value> {
+    json(&api::verify_with(&credential, &resolved))
 }

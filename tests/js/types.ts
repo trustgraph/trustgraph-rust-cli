@@ -18,7 +18,13 @@ const best: number = view[0]?.score ?? 0;
 const rollups: TG.TrustAtom[] = tg.rollup([credential], me.did, null, new Date().toISOString());
 const id: string = tg.atomId(rollups[0]!);
 
+const url: string = tg.didDocumentUrl("did:web:example.com");
+const keyDoc: TG.DidDocument = tg.resolveDidKey(me.did);
+const withDoc: TG.Verification = tg.verifyWith(credential, keyDoc);
+const withLog: TG.Verification = tg.verifyWith(credential, { didLog: "" });
+const resolution: TG.DidResolution = tg.resolveDidWebvh("did:webvh:Qm:example.com", "", { versionNumber: 1 });
+
 // @ts-expect-error depth must be a number
 tg.lens([], me.did, { depth: "3" });
 
-export { atom, best, id, fromSeed };
+export { atom, best, id, fromSeed, url, withDoc, withLog, resolution };

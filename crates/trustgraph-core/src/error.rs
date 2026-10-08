@@ -26,6 +26,10 @@ pub enum Error {
     #[error("invalid credential: {0}")]
     InvalidCredential(String),
 
+    /// A DID, DID document or DID log is malformed or fails verification.
+    #[error("invalid DID: {0}")]
+    InvalidDid(String),
+
     /// A credential is well formed but its proof does not verify.
     #[error("verification failed: {0}")]
     Verification(String),

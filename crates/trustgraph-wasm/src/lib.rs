@@ -9,7 +9,7 @@
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value as Json;
-use trustgraph_core::api::{self, LensRequest};
+use trustgraph_core::api::{self, LensRequest, WebvhOptions};
 use wasm_bindgen::prelude::*;
 
 type JsResult<T> = Result<T, JsError>;
@@ -141,4 +141,50 @@ pub fn lens(items: JsValue, root: &str, options: JsValue) -> JsResult<JsValue> {
 #[wasm_bindgen]
 pub fn rollup(items: JsValue, root: &str, options: JsValue, at: &str) -> JsResult<JsValue> {
     to_js(&core(api::rollup(from_js(items, "items")?, root, &request(options)?, at))?)
+}
+
+/// Where a `did:web` document (`did.json`) or `did:webvh` log (`did.jsonl`)
+/// is published. Fetch it yourself, then call [`verify_with`] or
+/// [`resolve_did_webvh`].
+///
+/// # Errors
+///
+/// Throws if `did` is not a valid `did:web` or `did:webvh`.
+#[wasm_bindgen(js_name = didDocumentUrl)]
+pub fn did_document_url(did: &str) -> JsResult<String> {
+    core(api::did_document_url(did))
+}
+
+/// The DID document of a `did:key`.
+///
+/// # Errors
+///
+/// Throws if `did` is not an Ed25519 `did:key`.
+#[wasm_bindgen(js_name = resolveDidKey)]
+pub fn resolve_did_key(did: &str) -> JsResult<JsValue> {
+    to_js(&core(api::resolve_did_key(did))?)
+}
+
+/// Verifies a `did:webvh` log (the text of `did.jsonl`) and resolves the
+/// DID: `{didDocument, didDocumentMetadata}`. `options` is optional:
+/// `{didWitness?, versionId?, versionNumber?, versionTime?, now?}`.
+///
+/// # Errors
+///
+/// Throws if the log does not verify or the version does not exist.
+#[wasm_bindgen(js_name = resolveDidWebvh)]
+pub fn resolve_did_webvh(did: &str, did_log: &str, options: JsValue) -> JsResult<JsValue> {
+    let options = from_js::<Option<WebvhOptions>>(options, "options")?.unwrap_or_default();
+    to_js(&core(api::resolve_did_webvh(did, did_log, &options))?)
+}
+
+/// Verifies a credential against its issuer's resolved DID: a DID document,
+/// or `{didLog, didWitness?}` for a `did:webvh`.
+///
+/// # Errors
+///
+/// Throws only if the inputs cannot be read as JSON.
+#[wasm_bindgen(js_name = verifyWith)]
+pub fn verify_with(credential: JsValue, resolved: JsValue) -> JsResult<JsValue> {
+    to_js(&api::verify_with(&from_js::<Json>(credential, "credential")?, &from_js::<Json>(resolved, "resolved")?))
 }

@@ -22,9 +22,10 @@ with all protocol logic in one Rust core. It will be renamed to
 
 **Next steps, in order:**
 
-0. **Finish the monorepo.** The layout is done. Still to do: bring in the
-   protocol docs and the JSON-LD schema from their separate repos, archive
-   the old ones, and rename this repo to `trustgraph/trustgraph`.
+0. **Finish the monorepo.** The layout is done, and the protocol docs and
+   the 2017 JSON-LD schema are imported with their history. Still to do, on
+   GitHub: archive the old repos and rename this repo to
+   `trustgraph/trustgraph`.
 1. **Lock the data format.** Publish the JSON-LD context and JSON Schema at
    `trustgraph.net`, freeze the atom and credential shapes as v1, and add
    exports to other reputation formats (IETF Reputons).
@@ -54,9 +55,9 @@ with all protocol logic in one Rust core. It will be renamed to
   deploy time. Public is simplest; private needs a test that Convex can
   install from a private registry first.
 - **The existing `trustgraph/trustgraph` repo:** that name is taken by the
-  protocol README repo. To rename this repo to `trustgraph/trustgraph`, first
-  move that README in here (Phase 0), then rename the old repo to
-  `trustgraph-protocol-archive` and archive it.
+  protocol README repo. That README is now in `doc/protocol/` with its
+  history (Phase 0), so you can rename the old repo to
+  `trustgraph-protocol-archive`, archive it, then rename this one.
 
 Everything below this line is supporting detail.
 
@@ -105,6 +106,7 @@ Everything below this line is supporting detail.
 | `lens` on 100k atoms (Node 24 LTS): 0.54 s WebAssembly, 0.43 s native ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 | CI: purity check, WebAssembly size budget, native addon on 3 OSes, latest Node LTS plus Node 22 ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 | `did:webvh` (DIF v1.0): pure log verification (passes the DIF test suite), create, key rotation with pre-rotation, historical resolution; `did:web`; HTTPS resolver with cache and `--offline` ([identity](../identity.md)) | ✅ |
+| Old repos imported with full history: protocol README → `doc/protocol/`, 2017 JSON-LD → `schema/legacy-2017/` | ✅ |
 
 ## Design principles
 
@@ -138,21 +140,21 @@ pass in CI.
 
 One repository for every Trust Graph project, so the core and everything
 built on it change together, in one PR and one CI run. The layout and
-language policy shipped in [PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15); what remains is bringing the other repos in.
+language policy shipped in [PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15). The old repos' content is now
+imported with its full history, so `git log --follow` and `git blame` work on
+the imported files. What remains is manual, on GitHub.
 
-| Today | Moves to | Then |
+| Was | Now in this repo | Still to do (owner, on GitHub) |
 |---|---|---|
-| [`trustgraph/trustgraph`](https://github.com/trustgraph/trustgraph) (protocol README) | `doc/protocol.md`, updated to the current atom and credential formats | Rename the old repo to `trustgraph-protocol-archive` and archive it |
-| [`trustgraph/trustgraph-schema`](https://github.com/trustgraph/trustgraph-schema) (JSON-LD) | `schema/`, alongside the new v1 context (Phase 1) | Archive; keep GitHub Pages serving the old URL, or redirect it |
-| [`trustgraph/js-trustgraph-cli`](https://github.com/trustgraph/js-trustgraph-cli) | Nothing: `trust` replaces it | Already archived |
-| This repo, `trustgraph-rust-cli` | | Rename to `trustgraph/trustgraph`. GitHub redirects the old URLs |
+| [`trustgraph/trustgraph`](https://github.com/trustgraph/trustgraph) (protocol README) | ✅ [`doc/protocol/`](../protocol/README.md), with history, marked historical. Updating it to the current formats is part of Phase 1 | Rename the old repo to `trustgraph-protocol-archive`, point its README here, archive it |
+| [`trustgraph/trustgraph-schema`](https://github.com/trustgraph/trustgraph-schema) (2017 JSON-LD, served by GitHub Pages at `schema.trustgraph.io` and referenced as `raw.githubusercontent.com/trustgraph/trustgraph-schema/gh-pages/TrustClaim.jsonld`) | ✅ [`schema/legacy-2017/`](../../schema/legacy-2017), with history. The new v1 context goes in `schema/v1/` (Phase 1) | Archive it (archived repos keep serving GitHub Pages and raw URLs, so old links keep working), point its README here; optionally redirect `schema.trustgraph.io` to `trustgraph.net` |
+| [`trustgraph/js-trustgraph-cli`](https://github.com/trustgraph/js-trustgraph-cli) | Nothing to import: `trust` replaces it, and its history up to March 2017 is shared with the protocol repo, so it came in with that import | Nothing: already archived |
+| This repo, `trustgraph-rust-cli` | | Once the protocol repo is renamed, rename this one to `trustgraph/trustgraph`. GitHub redirects the old URLs |
 
-- Import with history (`git subtree add` or `git filter-repo`), so blame and
-  past discussion survive.
 - Layout (done): Rust crates in `crates/*` (one Cargo workspace), TypeScript
-  packages in `packages/*` (one pnpm workspace), docs in `doc/`. TypeScript
-  calls the core through the WebAssembly or native package and never
-  re-implements protocol logic.
+  packages in `packages/*` (one pnpm workspace), docs in `doc/`, JSON-LD in
+  `schema/`. TypeScript calls the core through the WebAssembly or native
+  package and never re-implements protocol logic.
 - **Acceptance:** one `cargo test` and one CI run cover everything in the
   repo; the old repos are archived and point here.
 
@@ -240,7 +242,7 @@ language policy shipped in [PR #15](https://github.com/trustgraph/trustgraph-rus
 | 5 | Copyright line in LICENSE | Currently the unfilled Apache template; e.g. "Trust Graph contributors" |
 | 6 | Sharing transport | HTTPS feeds first (no servers to run); add other transports only when there is demand |
 | 7 | MSRV policy | Stable minus about 6 releases; raise it on purpose, never by accident |
-| 8 | The existing `trustgraph/trustgraph` repo | Move its README into `doc/protocol.md`, rename it `trustgraph-protocol-archive`, archive it, then rename this repo to `trustgraph/trustgraph` |
+| 8 | The existing `trustgraph/trustgraph` repo | Its README is now in `doc/protocol/` (done). Rename it `trustgraph-protocol-archive`, archive it, then rename this repo to `trustgraph/trustgraph` |
 
 ## Appendix A: the 2022 TODO list
 

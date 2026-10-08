@@ -9,7 +9,8 @@ use serde::Serialize;
 use serde_json::Value as Json;
 
 /// Reads every JSON value from `path` (or stdin for `None` / `-`). Accepts a
-/// single document, NDJSON, or concatenated JSON.
+/// single document, NDJSON, or concatenated JSON; or whitespace-separated
+/// compact JWS tokens (`eyJ…`), returned as JSON strings.
 pub fn read_json(path: Option<&Path>) -> Result<Vec<Json>> {
     let (reader, name): (Box<dyn Read>, String) = match path {
         Some(p) if p.as_os_str() != "-" => (
@@ -23,11 +24,18 @@ pub fn read_json(path: Option<&Path>) -> Result<Vec<Json>> {
             (Box::new(io::stdin().lock()), "stdin".to_owned())
         }
     };
-    let values = serde_json::Deserializer::from_reader(reader)
-        .into_iter::<Json>()
-        .enumerate()
-        .map(|(n, v)| v.with_context(|| format!("{name}: item {} is not valid JSON", n + 1)))
-        .collect::<Result<Vec<_>>>()?;
+    let mut text = String::new();
+    BufReader::new(reader).read_to_string(&mut text).with_context(|| format!("reading {name}"))?;
+    // Compact JWS tokens (`eyJ…`, e.g. application/vc+jwt) become JSON strings.
+    let values = if text.trim_start().starts_with("eyJ") {
+        text.split_whitespace().map(|token| Json::String(token.to_owned())).collect()
+    } else {
+        serde_json::Deserializer::from_str(&text)
+            .into_iter::<Json>()
+            .enumerate()
+            .map(|(n, v)| v.with_context(|| format!("{name}: item {} is not valid JSON", n + 1)))
+            .collect::<Result<Vec<_>>>()?
+    };
     if values.is_empty() {
         bail!("{name}: no input");
     }
@@ -52,6 +60,12 @@ impl<W: Write> Output<W> {
             serde_json::to_writer(&mut self.out, value)?;
         }
         self.out.write_all(b"\n")?;
+        Ok(())
+    }
+
+    /// Writes text as it is (it should end with a newline).
+    pub fn text(&mut self, text: &str) -> Result<()> {
+        self.out.write_all(text.as_bytes())?;
         Ok(())
     }
 

@@ -79,6 +79,28 @@ assert.equal(doc.verificationMethod[0].type, "Multikey");
 assert.equal(doc.assertionMethod[0], `${alice.did}#${alice.publicKeyMultibase}`);
 assert.throws(() => tg.didDocument("did:web:example.com"), /did:key/);
 
+// application/vc+jwt (VC-JOSE-COSE): same atom, same atom ID, strict verification.
+const jwt = tg.signVcJwt({ source: alice.did, target: bob.did, content: "sushi", value: 1 }, alice.secretKeyMultibase, now);
+assert.match(jwt, /^eyJ[\w-]+\.[\w-]+\.[\w-]+$/);
+const jwtCheck = tg.verifyVcJwt(jwt);
+assert.equal(jwtCheck.valid, true);
+assert.equal(jwtCheck.id, tg.atomId(items[0]));
+assert.equal(tg.verifyVcJwt(jwt.slice(0, -2) + (jwt.endsWith("AA") ? "BA" : "AA")).valid, false);
+assert.throws(() => tg.signVcJwt({ source: bob.did, target: "urn:x:y" }, alice.secretKeyMultibase, now), /signing key/);
+
+// Other formats, from the current atoms.
+const peer = tg.toPeerTrust(items);
+assert.deepEqual(peer[0].credentialSubject.trustworthiness, [{ scope: "sushi", level: 1 }]);
+assert.deepEqual(tg.fromPeerTrust(peer[1]).map((a) => a.value), ["0.8"]);
+const csv = tg.toIjvCsv(items).trim().split("\n");
+assert.equal(csv[0], "i,j,v");
+assert.deepEqual(csv.slice(1).sort(), [`${alice.did},${bob.did},1`, `${bob.did},https://sushi.example,0.8`].sort());
+assert.equal(tg.toIjvCsv(items, { topic: "pizza", negative: "keep" }), "i,j,v\n");
+assert.deepEqual(tg.toAtprotoLabels(items).map((l) => l.val), ["trusted-sushi", "trusted-sushi"]);
+assert.equal(tg.toNostrLabels(items)[1].kind, 1985);
+assert.equal(tg.toSchemaOrg(items)["@graph"][1].reviewRating.ratingValue, 0.8);
+assert.throws(() => tg.toSchemaOrg([{ source: "urn:x:a", target: "urn:x:b" }]), /no value/);
+
 assert.equal(tg.canonicalAtom({ target: "urn:b", source: "urn:a" }), '{"source":"urn:a","target":"urn:b"}');
 assert.equal(tg.toCredential({ source: "urn:a", target: "urn:b" }).type[1], "TrustAtomCredential");
 assert.throws(() => tg.parseAtom({ source: "urn:a" }), /target/);

@@ -27,7 +27,20 @@ const doc: TG.DidDocument = tg.didDocument(me.did);
 const method: "Multikey" = doc.verificationMethod[0]!.type;
 const normalized: string = tg.normalizeId(id);
 
+const jwt: TG.VcJwt = tg.signVcJwt(rollups[0]!, me.secretKeyMultibase, new Date().toISOString());
+const jwtValid: boolean = tg.verifyVcJwt(jwt).valid;
+const peer: TG.PeerTrustCredential[] = tg.toPeerTrust([credential]);
+const level: number = peer[0]?.credentialSubject.trustworthiness[0]?.level ?? 0;
+const fromPeer: TG.TrustAtom[] = tg.fromPeerTrust(peer[0]!);
+const csv: string = tg.toIjvCsv([credential], { negative: "keep" });
+const labels: TG.AtprotoLabel[] = tg.toAtprotoLabels([credential]);
+const events: TG.NostrLabelEvent[] = tg.toNostrLabels([credential]);
+const reviews: TG.SchemaOrgDocument = tg.toSchemaOrg([credential]);
+
+// @ts-expect-error negative is "drop" or "keep"
+tg.toIjvCsv([], { negative: "clip" });
+
 // @ts-expect-error depth must be a number
 tg.lens([], me.did, { depth: "3" });
 
-export { atom, best, id, fromSeed, replacing, method, normalized };
+export { atom, best, id, fromSeed, replacing, method, normalized, jwtValid, level, fromPeer, csv, labels, events, reviews };

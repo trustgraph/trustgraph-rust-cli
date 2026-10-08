@@ -10,6 +10,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value as Json;
 use trustgraph_core::api::{self, LensRequest};
+use trustgraph_core::export::ijv::CsvOptions;
 use wasm_bindgen::prelude::*;
 
 type JsResult<T> = Result<T, JsError>;
@@ -173,4 +174,87 @@ pub fn lens(items: JsValue, root: &str, options: JsValue) -> JsResult<JsValue> {
 #[wasm_bindgen]
 pub fn rollup(items: JsValue, root: &str, options: JsValue, at: &str) -> JsResult<JsValue> {
     to_js(&core(api::rollup(from_js(items, "items")?, root, &request(options)?, at))?)
+}
+
+/// Signs an atom as an `application/vc+jwt` compact JWS (VC-JOSE-COSE,
+/// `alg: Ed25519`). `created` (RFC 3339) stamps an atom without a timestamp.
+///
+/// # Errors
+///
+/// Throws like [`sign_atom`].
+#[wasm_bindgen(js_name = signVcJwt)]
+pub fn sign_vc_jwt(atom: JsValue, secret_key_multibase: &str, created: &str) -> JsResult<String> {
+    core(api::sign_vc_jwt(from_js(atom, "atom")?, secret_key_multibase, created))
+}
+
+/// Verifies an `application/vc+jwt`: `{valid, id?, credentialId?, issuer?, atom?, error?}`.
+///
+/// # Errors
+///
+/// Never throws: an invalid JWT is reported in the result.
+#[wasm_bindgen(js_name = verifyVcJwt)]
+pub fn verify_vc_jwt(jwt: &str) -> JsResult<JsValue> {
+    to_js(&api::verify_vc_jwt(jwt))
+}
+
+/// Current atoms in `items` as unsigned CAIP-261 `PeerTrustCredential`s.
+///
+/// # Errors
+///
+/// Throws if an item is invalid or an atom has no value.
+#[wasm_bindgen(js_name = toPeerTrust)]
+pub fn to_peer_trust(items: JsValue) -> JsResult<JsValue> {
+    to_js(&core(api::to_peer_trust(from_js(items, "items")?))?)
+}
+
+/// The atoms in a CAIP-261 `PeerTrustCredential` (its proof is not checked).
+///
+/// # Errors
+///
+/// Throws if the input is not a `PeerTrustCredential` or an entry is invalid.
+#[wasm_bindgen(js_name = fromPeerTrust)]
+pub fn from_peer_trust(credential: JsValue) -> JsResult<JsValue> {
+    to_js(&core(api::from_peer_trust(&from_js::<Json>(credential, "credential")?))?)
+}
+
+/// Current atoms in `items` as an OpenRank / EigenTrust `i,j,v` CSV.
+/// `options` is optional: `{topic?, negative?: "drop" | "keep"}`.
+///
+/// # Errors
+///
+/// Throws if an item or the options are invalid.
+#[wasm_bindgen(js_name = toIjvCsv)]
+pub fn to_ijv_csv(items: JsValue, options: JsValue) -> JsResult<String> {
+    let options = from_js::<Option<CsvOptions>>(options, "options")?.unwrap_or_default();
+    core(api::to_ijv_csv(from_js(items, "items")?, &options))
+}
+
+/// Current atoms in `items` as unsigned AT Protocol labels.
+///
+/// # Errors
+///
+/// Throws if an item is invalid or cannot be a label.
+#[wasm_bindgen(js_name = toAtprotoLabels)]
+pub fn to_atproto_labels(items: JsValue) -> JsResult<JsValue> {
+    to_js(&core(api::to_atproto_labels(from_js(items, "items")?))?)
+}
+
+/// Current atoms in `items` as unsigned Nostr NIP-32 label events.
+///
+/// # Errors
+///
+/// Throws if an item is invalid or cannot be a label.
+#[wasm_bindgen(js_name = toNostrLabels)]
+pub fn to_nostr_labels(items: JsValue) -> JsResult<JsValue> {
+    to_js(&core(api::to_nostr_labels(from_js(items, "items")?))?)
+}
+
+/// Current atoms in `items` as one schema.org JSON-LD document of `Review`s.
+///
+/// # Errors
+///
+/// Throws if an item is invalid or an atom has no value.
+#[wasm_bindgen(js_name = toSchemaOrg)]
+pub fn to_schema_org(items: JsValue) -> JsResult<JsValue> {
+    to_js(&core(api::to_schema_org(from_js(items, "items")?))?)
 }

@@ -49,13 +49,15 @@ pub enum Command {
     /// Sign Trust Atoms (from a file or stdin) as Verifiable Credentials
     Sign(SignArgs),
 
-    /// Verify signed Trust Atom credentials; exits 1 if any are invalid
+    /// Verify signed Trust Atom credentials (Data Integrity or vc+jwt); exits
+    /// 1 if any are invalid
     Verify(InputArgs),
 
     /// Print the ID (a bafkrei… CIDv1) of atoms or credentials
     Id(IdArgs),
 
-    /// Convert atoms and credentials between formats
+    /// Convert atoms and credentials to and from other formats: vc+jwt,
+    /// CAIP-261, i,j,v CSV, AT Protocol and Nostr labels, schema.org
     Convert(ConvertArgs),
 
     /// Add atoms or signed credentials to the local store
@@ -167,7 +169,8 @@ pub struct AtomArgs {
 
 #[derive(Debug, Args)]
 pub struct InputArgs {
-    /// JSON or NDJSON input file; `-` or nothing reads stdin
+    /// JSON or NDJSON input file (or vc+jwt tokens, one per line); `-` or
+    /// nothing reads stdin
     #[arg(value_name = "FILE")]
     pub input: Option<PathBuf>,
 }
@@ -204,13 +207,63 @@ pub enum Format {
     Credential,
     /// The atom's canonical JSON (RFC 8785), exactly as hashed
     Canonical,
+    /// A signed application/vc+jwt (VC-JOSE-COSE, alg Ed25519), signed
+    /// with --key
+    VcJwt,
+    /// Unsigned CAIP-261 peer trust credentials, one per source and target
+    #[value(name = "caip-261")]
+    Caip261,
+    /// An OpenRank / EigenTrust local-trust CSV (i,j,v)
+    IjvCsv,
+    /// Unsigned AT Protocol labels (trusted / distrusted, with neg)
+    AtprotoLabel,
+    /// Unsigned Nostr NIP-32 label events (kind 1985)
+    NostrLabel,
+    /// One schema.org JSON-LD document of Reviews
+    SchemaOrg,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum InputFormat {
+    /// Trust Atoms or credentials
+    Atom,
+    /// application/vc+jwt tokens, which must verify
+    VcJwt,
+    /// CAIP-261 peer trust credentials (proofs are not checked)
+    #[value(name = "caip-261")]
+    Caip261,
+}
+
+/// What `i,j,v` CSV export does with zero and negative values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum NegativeArg {
+    /// Leave them out (EigenTrust needs non-negative trust)
+    Drop,
+    /// Write them as they are
+    Keep,
 }
 
 #[derive(Debug, Args)]
 pub struct ConvertArgs {
-    /// Output format
+    /// Output format [default with --from: atom]
+    #[arg(long, value_enum, required_unless_present = "from")]
+    pub to: Option<Format>,
+
+    /// Input format [default: atom]
     #[arg(long, value_enum)]
-    pub to: Format,
+    pub from: Option<InputFormat>,
+
+    /// For ijv-csv: only atoms about this topic
+    #[arg(long)]
+    pub topic: Option<String>,
+
+    /// For ijv-csv: zero and negative values
+    #[arg(long, value_enum, default_value = "drop")]
+    pub negative: NegativeArg,
+
+    /// For vc-jwt: the key to sign with
+    #[command(flatten)]
+    pub key: KeyArg,
 
     #[command(flatten)]
     pub input: InputArgs,

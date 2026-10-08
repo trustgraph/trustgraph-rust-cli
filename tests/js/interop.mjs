@@ -1,7 +1,8 @@
 // Interoperability test: Trust Graph credentials against an off-the-shelf
 // W3C Verifiable Credentials stack (Digital Bazaar's @digitalbazaar/vc with
 // the eddsa-jcs-2022 Data Integrity cryptosuite), in both directions, plus
-// JSON-LD safe mode (no undefined terms) and the v1 JSON Schemas. Nothing is
+// JSON-LD safe mode (no undefined terms) and the v1 JSON Schemas; and
+// application/vc+jwt (VC-JOSE-COSE) against the `jose` library. Nothing is
 // fetched: the document loader serves the W3C VC 2.0 context, the Trust Graph
 // v1 context and did:key documents locally, and refuses everything else.
 //
@@ -20,6 +21,8 @@ import * as Ed25519Multikey from "@digitalbazaar/ed25519-multikey";
 import { contexts as w3cContexts } from "@digitalbazaar/credentials-context";
 import jsonld from "jsonld";
 import Ajv2020 from "ajv/dist/2020.js";
+import * as jose from "jose";
+import { createPrivateKey, createPublicKey, sign as nodeSign } from "node:crypto";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const readJson = (...path) => JSON.parse(readFileSync(join(repo, ...path), "utf8"));
@@ -225,6 +228,78 @@ for (const bad of [
 ]) {
   assert.equal(validAtom(bad), false, JSON.stringify(bad));
   assert.throws(() => tg.parseAtom(bad), undefined, JSON.stringify(bad));
+}
+
+// --- 6. application/vc+jwt (VC-JOSE-COSE) against `jose` -------------------
+
+const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function base58btc(s) {
+  let n = 0n;
+  for (const c of s) n = n * 58n + BigInt(BASE58.indexOf(c));
+  const bytes = [];
+  for (; n > 0n; n >>= 8n) bytes.unshift(Number(n & 0xffn));
+  return Uint8Array.from(bytes);
+}
+/** Node key objects for a `secretKeyMultibase` (`z` + base58btc(0x8026 ‖ seed)). */
+function nodeKeys(secretKeyMultibase) {
+  const seed = base58btc(secretKeyMultibase.slice(1)).slice(2);
+  const pkcs8 = Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), seed]);
+  const privateKey = createPrivateKey({ key: pkcs8, format: "der", type: "pkcs8" });
+  return { privateKey, publicKey: createPublicKey(privateKey) };
+}
+/** RFC 8785 for the strings, arrays and objects in a credential. */
+const jcs = (v) =>
+  Array.isArray(v)
+    ? `[${v.map(jcs).join(",")}]`
+    : v && typeof v === "object"
+      ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${jcs(v[k])}`).join(",")}}`
+      : JSON.stringify(v);
+
+// Golden JWTs (signed by the core with the spec key) verify with jose, typ and alg checked.
+const specKeys = nodeKeys(key.secretKeyMultibase);
+const goldenInput = readFileSync(join(repo, "test-vectors", "exports", "input.ndjson"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+const goldenJwts = readFileSync(join(repo, "test-vectors", "exports", "vc-jwt.txt"), "utf8").trim().split("\n");
+assert.equal(goldenJwts.length, goldenInput.length);
+for (const [i, jwt] of goldenJwts.entries()) {
+  const { payload, protectedHeader } = await jose.jwtVerify(jwt, specKeys.publicKey, { algorithms: ["Ed25519"], typ: "vc+jwt" });
+  assert.deepEqual(protectedHeader, { alg: "Ed25519", cty: "vc", kid: key.verificationMethod, typ: "vc+jwt" });
+  const atom = tg.parseAtom(goldenInput[i]);
+  assert.deepEqual(payload, tg.toCredential(atom), "the JWT payload is the unsecured credential");
+  assert.equal(tg.verifyVcJwt(jwt).id, tg.atomId(atom));
+  await assertNoUndefinedTerms(payload);
+  schemaOk(validCredential, payload, `vc-jwt payload ${i + 1}`);
+}
+
+// jose signs the same header and payload: byte-identical JWTs, and the core verifies jose's.
+const aliceKeys = nodeKeys(alice.secretKeyMultibase);
+const kid = `${alice.did}#${alice.publicKeyMultibase}`;
+const joseSign = (header, payload = jcs(tg.toCredential(atom))) =>
+  new jose.CompactSign(new TextEncoder().encode(payload)).setProtectedHeader(header).sign(aliceKeys.privateKey);
+const coreJwt = tg.signVcJwt(atom, alice.secretKeyMultibase, created);
+assert.equal(await joseSign({ alg: "Ed25519", cty: "vc", kid, typ: "vc+jwt" }), coreJwt, "jose and the core sign identically");
+await jose.compactVerify(coreJwt, aliceKeys.publicKey, { algorithms: ["Ed25519"] });
+const fromJose = tg.verifyVcJwt(await joseSign({ alg: "Ed25519", typ: "vc+jwt", kid }));
+assert.equal(fromJose.valid, true, fromJose.error);
+assert.deepEqual(fromJose.atom, atom);
+assert.equal(tg.verifyVcJwt(await joseSign({ alg: "EdDSA", typ: "vc+jwt", kid })).valid, true, "legacy EdDSA (RFC 8037)");
+// Signed by hand, since jose refuses to make some of these.
+const b64url = (s) => Buffer.from(s).toString("base64url");
+function rawSign(header, payload = jcs(tg.toCredential(atom))) {
+  const input = `${b64url(JSON.stringify(header))}.${b64url(payload)}`;
+  return `${input}.${nodeSign(null, Buffer.from(input), aliceKeys.privateKey).toString("base64url")}`;
+}
+assert.equal(tg.verifyVcJwt(rawSign({ alg: "Ed25519", typ: "vc+jwt", kid })).valid, true);
+// As strict as Data Integrity: wrong typ, missing kid, JWT claims, a payload that breaks the profile.
+for (const [header, payload, why] of [
+  [{ alg: "Ed25519", typ: "JWT", kid }, undefined, /typ/],
+  [{ alg: "Ed25519", typ: "vc+jwt" }, undefined, /kid/],
+  [{ alg: "Ed25519", typ: "vc+jwt", kid }, JSON.stringify({ ...tg.toCredential(atom), iat: 1 }), /iat/],
+  [{ alg: "Ed25519", typ: "vc+jwt", kid }, JSON.stringify({ vc: tg.toCredential(atom) }), /vc|@context/],
+  [{ alg: "Ed25519", typ: "vc+jwt", kid, crit: ["exp"] }, undefined, /crit/],
+]) {
+  const result = tg.verifyVcJwt(rawSign(header, payload));
+  assert.equal(result.valid, false, JSON.stringify(header));
+  assert.match(result.error, why);
 }
 
 console.log(`interop test passed: ${process.argv[2]}`);

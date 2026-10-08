@@ -389,9 +389,15 @@ change. Additive changes that old verifiers would reject (new credential
 members, non-string `extra` values) need a new context URL and a new
 version. Planned candidates, informed by the
 [standards review](research/2026-10-standards.md): `validUntil` for expiring
-ratings, `did:webvh` issuers for key rotation, a `vc+jwt` (VC-JOSE) export,
-and converters to RFC 7071 reputons, CAIP-261 `PeerTrustCredential`, DIF
-Trust Establishment and AT Protocol labels.
+ratings, `did:webvh` issuers for key rotation, and a converter to DIF Trust
+Establishment.
+
+Securing the same v1 credential as `application/vc+jwt` (VC-JOSE-COSE) is
+not a format change: the JWT payload is exactly the unsecured credential of
+§4, held to the same profile ([doc/formats/vc-jwt.md](formats/vc-jwt.md)).
+Exports to other formats (CAIP-261, `i,j,v` CSV, AT Protocol and Nostr
+labels, schema.org) live in [doc/formats/](formats/) and do not change the
+v1 format either.
 
 ## Appendix: history
 

@@ -273,6 +273,103 @@ fn convert_formats() {
 }
 
 #[test]
+fn convert_to_and_from_vc_jwt() {
+    let env = Env::new();
+    let alice = env.new_key("default");
+    let atoms = env.run(&["atom", "-t", "https://sushi.example", "-c", "sushi", "-v", "0.9"], "")
+        + &env.run(&["atom", "-t", "did:web:bob.example", "-v", "-1", "--sign"], "");
+
+    // One compact JWS per item; `trust verify` checks them like credentials.
+    let jwts = env.run(&["convert", "--to", "vc-jwt"], &atoms);
+    assert_eq!(jwts.lines().count(), 2);
+    assert!(jwts.lines().all(|l| l.starts_with("eyJ") && l.split('.').count() == 3));
+    let checks = env.json_lines(&["verify"], &jwts);
+    assert!(checks.iter().all(|c| c["valid"] == true && c["issuer"] == alice.as_str()));
+    assert_eq!(checks[0]["id"], env.run(&["id"], &atoms).lines().next().unwrap());
+
+    // Import: verified, then any format.
+    let back = env.json_lines(&["convert", "--from", "vc-jwt"], &jwts);
+    assert_eq!(back[0]["target"], "https://sushi.example");
+    let credential = &env.json_lines(&["convert", "--from", "vc-jwt", "--to", "credential"], &jwts)[1];
+    assert_eq!(credential["credentialSubject"]["value"], "-1");
+    assert!(credential.get("proof").is_none());
+
+    // Tampering is caught on import and by verify; JWTs need --from.
+    let first = jwts.lines().next().unwrap();
+    let (rest, signature) = first.rsplit_once('.').unwrap();
+    let flipped = if signature.starts_with('A') { "B" } else { "A" };
+    let tampered = format!("{rest}.{flipped}{}", &signature[1..]);
+    env.cmd().args(["verify"]).write_stdin(tampered.clone()).assert().code(1);
+    env.cmd()
+        .args(["convert", "--from", "vc-jwt"])
+        .write_stdin(tampered)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("item 1"));
+    env.cmd()
+        .args(["convert", "--to", "atom"])
+        .write_stdin(jwts)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--from vc-jwt"));
+
+    // Signing someone else's atom fails.
+    env.cmd()
+        .args(["convert", "--to", "vc-jwt"])
+        .write_stdin(r#"{"source":"did:web:carol.example","target":"urn:x:y"}"#)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("does not match signing key"));
+}
+
+#[test]
+fn convert_to_other_formats() {
+    let env = Env::new();
+    let atoms = "{\"source\":\"did:web:alice.example\",\"target\":\"did:web:bob.example\",\"content\":\"Rust code review\",\"value\":\"0.8\",\"timestamp\":\"2026-10-08T12:00:00Z\",\"extra\":{\"reason\":\"pairing\"}}\n\
+                 {\"source\":\"did:web:alice.example\",\"target\":\"https://sushi.example\",\"content\":\"sushi\",\"value\":\"-0.5\",\"timestamp\":\"2026-10-08T13:00:00Z\"}\n";
+
+    let peer = env.json_lines(&["convert", "--to", "caip-261"], atoms);
+    assert_eq!(peer.len(), 2);
+    assert_eq!(peer[0]["type"], json!(["VerifiableCredential", "PeerTrustCredential"]));
+    assert_eq!(
+        peer[0]["credentialSubject"]["trustworthiness"],
+        json!([{ "scope": "Rust code review", "level": 0.8, "reason": ["pairing"] }])
+    );
+    // CAIP-261 round-trips; `--to` defaults to atom.
+    let peer_text = peer.iter().map(|p| p.to_string() + "\n").collect::<String>();
+    assert_eq!(env.run(&["convert", "--from", "caip-261"], &peer_text), atoms);
+
+    assert_eq!(
+        env.run(&["convert", "--to", "ijv-csv"], atoms),
+        "i,j,v\ndid:web:alice.example,did:web:bob.example,0.8\n"
+    );
+    assert_eq!(
+        env.run(&["convert", "--to", "ijv-csv", "--negative", "keep", "--topic", "sushi"], atoms),
+        "i,j,v\ndid:web:alice.example,https://sushi.example,-0.5\n"
+    );
+
+    let labels = env.json_lines(&["convert", "--to", "atproto-label"], atoms);
+    assert_eq!(labels[0]["val"], "trusted-rust-code-review");
+    assert_eq!(labels[1]["val"], "distrusted-sushi");
+    let events = env.json_lines(&["convert", "--to", "nostr-label"], atoms);
+    assert_eq!(events[1]["kind"], 1985);
+    assert_eq!(events[1]["tags"][2], json!(["r", "https://sushi.example"]));
+
+    let reviews = env.json_lines(&["convert", "--to", "schema-org"], atoms);
+    assert_eq!(reviews.len(), 1, "one JSON-LD document");
+    assert_eq!(reviews[0]["@graph"][1]["reviewRating"]["ratingValue"], json!(-0.5));
+
+    // Formats that need a value say which item lacks one.
+    env.cmd()
+        .args(["convert", "--to", "caip-261"])
+        .write_stdin(format!("{atoms}{{\"source\":\"did:web:alice.example\",\"target\":\"urn:x:y\"}}"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("item 3").and(predicate::str::contains("no value")));
+    env.cmd().arg("convert").write_stdin(atoms).assert().code(2).stderr(predicate::str::contains("--to"));
+}
+
+#[test]
 fn reads_ndjson_files_and_concatenated_json() {
     let env = Env::new();
     let path = env.home.path().join("atoms.json");

@@ -92,7 +92,7 @@ trust lens --topic sushi --rollup | trust sign | trust add
 | `trust sign [FILE]` | Sign atoms as Verifiable Credentials |
 | `trust verify [FILE]` | Verify credentials. Exits 1 if any are invalid |
 | `trust id [--credential] [FILE]` | Print atom IDs, or credential IDs (CIDv1, `bafkrei…`) |
-| `trust convert --to atom\|credential\|canonical [FILE]` | Convert between formats |
+| `trust convert --to FORMAT [--from FORMAT] [FILE]` | Convert between formats (below) |
 | `trust add [FILE]` | Add atoms or signed credentials to the local store |
 | `trust query [--source] [--target] [--topic] [--signed-only]` | Search the local store |
 | `trust lens [AGENT] [--topic] [--depth] [--decay] [--rollup]` | View the graph through an agent's lens |
@@ -100,9 +100,24 @@ trust lens --topic sushi --rollup | trust sign | trust add
 | `trust completions SHELL` | Shell completions |
 
 Input is read from `FILE` or stdin and may be a single JSON document, NDJSON,
-or concatenated JSON. Add `--pretty` to any command for readable output. Keys
+or concatenated JSON (or `vc+jwt` tokens, one per line). Add `--pretty` to any command for readable output. Keys
 and the store live in the platform data directory, or in `$TRUST_HOME`.
 `$TRUST_KEY` selects the key.
+
+### Other formats
+
+`trust convert` reads and writes formats other systems understand. Exports
+start from the current atoms (signed ones verified, superseded ones left
+out); each format's mapping and its sources are in [`doc/formats/`](doc/formats).
+
+| `--to` | `--from` | Format |
+|---|---|---|
+| `atom`, `credential`, `canonical` | `atom` | Trust Graph itself |
+| `vc-jwt` | `vc-jwt` | [`application/vc+jwt`](doc/formats/vc-jwt.md) (W3C VC-JOSE-COSE, `alg: Ed25519`): signed with `--key`, verified strictly; `trust verify` checks them too |
+| `caip-261` | `caip-261` | [CAIP-261 `PeerTrustCredential`](doc/formats/caip-261.md), one per source and target |
+| `ijv-csv` | | [OpenRank / EigenTrust `i,j,v` CSV](doc/formats/ijv-csv.md) (`--topic`, `--negative drop\|keep`) |
+| `atproto-label`, `nostr-label` | | [AT Protocol labels and Nostr NIP-32 events](doc/formats/labels.md), unsigned |
+| `schema-org` | | [schema.org `Review` JSON-LD](doc/formats/schema-org.md), for web pages |
 
 ## Data model
 

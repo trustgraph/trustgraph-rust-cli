@@ -1,0 +1,8 @@
+{
+  "source": "did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2",
+  "target": "did:web:alice.example",
+  "content": "https://schema.org/Review",
+  "value": "-0.25",
+  "timestamp": "2026-10-09T08:30:00Z",
+  "replaces": "ipfs://bafkreidni6r6c2l23ssdh74k2ld465hr7rxhb2cwr2w6lcerwb62sydine"
+}

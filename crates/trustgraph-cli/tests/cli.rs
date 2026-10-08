@@ -95,12 +95,20 @@ fn atom_creation() {
     assert!(atom["timestamp"].as_str().unwrap().ends_with('Z'));
 
     // An explicit source needs no key; negative values parse.
-    let atom = &env.json_lines(&["atom", "-s", "alice", "-t", "bob", "-v", "-0.5", "--no-timestamp"], "")[0];
-    assert_eq!(atom, &json!({ "source": "alice", "target": "bob", "value": "-0.5" }));
+    let atom = &env
+        .json_lines(&["atom", "-s", "did:web:alice.example", "-t", "urn:bob", "-v", "-0.5", "--no-timestamp"], "")[0];
+    assert_eq!(atom, &json!({ "source": "did:web:alice.example", "target": "urn:bob", "value": "-0.5" }));
 
-    env.cmd().args(["atom", "-t", "x", "-v", "1.5"]).assert().code(2);
-    env.cmd().args(["atom", "-t", "x", "-v", "6/5"]).assert().code(2);
-    env.cmd().args(["atom", "-s", "a b", "-t", "x"]).assert().failure().stderr(predicate::str::contains("whitespace"));
+    env.cmd().args(["atom", "-t", "urn:x", "-v", "1.5"]).assert().code(2);
+    env.cmd().args(["atom", "-t", "urn:x", "-v", "6/5"]).assert().code(2);
+    env.cmd()
+        .args(["atom", "-s", "a b", "-t", "urn:x"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("whitespace"));
+    env.cmd().args(["atom", "-t", "bob"]).assert().failure().stderr(predicate::str::contains("absolute URI"));
+    env.cmd().args(["atom", "-t", "urn:x", "--sign", "--no-timestamp"]).assert().code(2);
+    env.cmd().args(["atom", "-t", "urn:x", "--replaces", "nope"]).assert().code(2);
 }
 
 #[test]
@@ -116,6 +124,8 @@ fn sign_verify_pipeline() {
     let verified = &env.json_lines(&["verify"], &signed)[0];
     assert_eq!(verified["valid"], true);
     assert_eq!(verified["atom"], serde_json::from_str::<Json>(&atom).unwrap());
+    assert!(verified["id"].as_str().unwrap().starts_with("bafkrei"));
+    assert_eq!(verified["credentialId"], env.run(&["id", "--credential"], &signed).trim());
 
     // Tampering is detected and gives exit code 1.
     let tampered = signed.replace("\"value\":\"1\"", "\"value\":\"-1\"");
@@ -123,7 +133,7 @@ fn sign_verify_pipeline() {
     env.cmd().arg("verify").write_stdin(tampered).assert().code(1).stdout(predicate::str::contains("\"valid\":false"));
 
     // Signing someone else's atom, or re-signing, fails.
-    let foreign = env.run(&["atom", "-s", "did:key:z6MkSomeoneElse", "-t", "x"], "");
+    let foreign = env.run(&["atom", "-s", "did:key:z6MkSomeoneElse", "-t", "urn:x"], "");
     env.cmd().arg("sign").write_stdin(foreign).assert().failure().stderr(predicate::str::contains("does not match"));
     env.cmd().arg("sign").write_stdin(signed).assert().failure().stderr(predicate::str::contains("already signed"));
 }
@@ -132,7 +142,7 @@ fn sign_verify_pipeline() {
 fn atom_sign_flag_matches_sign_command() {
     let env = Env::new();
     env.new_key("default");
-    let signed = &env.json_lines(&["atom", "-t", "x", "-v", "1", "--sign"], "")[0];
+    let signed = &env.json_lines(&["atom", "-t", "urn:x", "-v", "1", "--sign"], "")[0];
     assert_eq!(env.json_lines(&["verify"], &signed.to_string())[0]["valid"], true);
 }
 
@@ -140,22 +150,120 @@ fn atom_sign_flag_matches_sign_command() {
 fn ids_are_stable_across_formats() {
     let env = Env::new();
     env.new_key("default");
-    let atom = env.run(&["atom", "-t", "x", "-v", "0.5", "--timestamp", "2024-01-01T00:00:00Z"], "");
+    let atom = env.run(&["atom", "-t", "urn:x", "-v", "0.5", "--timestamp", "2024-01-01T00:00:00Z"], "");
     let signed = env.run(&["sign"], &atom);
     let pretty: Json = serde_json::from_str(&atom).unwrap();
     let id = env.run(&["id"], &atom);
-    assert!(id.starts_with("Qm"));
+    assert!(id.starts_with("bafkrei"), "{id}");
     assert_eq!(env.run(&["id"], &signed), id);
     assert_eq!(env.run(&["id"], &serde_json::to_string_pretty(&pretty).unwrap()), id);
+
+    // The credential ID names the exact signed bytes, so it differs.
+    let credential_id = env.run(&["id", "--credential"], &signed);
+    assert!(credential_id.starts_with("bafkrei"));
+    assert_ne!(credential_id, id);
+    env.cmd()
+        .args(["id", "--credential"])
+        .write_stdin(atom)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not a credential"));
+}
+
+#[test]
+fn replaces_supersedes_a_credential() {
+    let env = Env::new();
+    let alice = env.new_key("default");
+    let bob = env.new_key("bob");
+    let typo = env.run(&["atom", "-t", "https://sushi.exmaple", "-c", "sushi", "-v", "0.9", "--sign"], "");
+    let typo_id = env.run(&["id", "--credential"], &typo);
+    let fixed = env.run(
+        &["atom", "-t", "https://sushi.example", "-c", "sushi", "-v", "0.9", "--replaces", typo_id.trim(), "--sign"],
+        "",
+    );
+    let credential: Json = serde_json::from_str(&fixed).unwrap();
+    assert_eq!(credential["credentialSubject"]["replaces"], format!("ipfs://{}", typo_id.trim()));
+    // Someone else cannot withdraw Alice's credential.
+    let hostile =
+        env.run(&["atom", "--key", "bob", "-t", &alice, "-v", "-1", "--replaces", typo_id.trim(), "--sign"], "");
+    env.run(&["add"], &format!("{typo}{fixed}{hostile}"));
+
+    let lens = env.json_lines(&["lens", "--topic", "sushi"], "");
+    assert_eq!(lens.len(), 1);
+    assert_eq!(lens[0]["target"], "https://sushi.example");
+    assert_eq!(env.json_lines(&["lens", &bob], "")[0]["target"], alice.as_str());
+    // The store keeps everything; supersession is applied when reading.
+    assert_eq!(env.json_lines(&["query"], "").len(), 3);
+}
+
+#[test]
+fn store_written_with_legacy_ids_still_works() {
+    let env = Env::new();
+    let did = env.new_key("default");
+    let signed = env.run(&["atom", "-t", "https://sushi.example", "-c", "sushi", "-v", "1", "--sign"], "");
+    let id = env.run(&["id"], &signed).trim().to_owned();
+    // The same digest, written the pre-v1 way.
+    let legacy_id = legacy_multihash(&id);
+    assert!(legacy_id.starts_with("Qm"));
+    // A store line exactly as an older `trust` wrote it.
+    let atom: Json = serde_json::from_str(&env.run(&["convert", "--to", "atom"], &signed)).unwrap();
+    let credential: Json = serde_json::from_str(&signed).unwrap();
+    let line = json!({ "id": legacy_id, "atom": atom, "credential": credential });
+    std::fs::write(env.home.path().join("atoms.ndjson"), format!("{line}\n")).unwrap();
+
+    let full = &env.json_lines(&["query", "--full"], "")[0];
+    assert_eq!(full["id"], id.as_str(), "legacy IDs are read, and shown in the new form");
+    assert_eq!(env.json_lines(&["add"], &signed)[0]["added"], false, "same atom, same ID");
+    assert_eq!(env.json_lines(&["lens", &did], "").len(), 1);
+    // New records are written with new IDs, alongside the old line.
+    env.run(&["add"], &env.run(&["atom", "-t", "https://ramen.example", "-v", "1", "--sign"], ""));
+    let lines = std::fs::read_to_string(env.home.path().join("atoms.ndjson")).unwrap();
+    assert!(lines.lines().next().unwrap().contains(&legacy_id));
+    assert!(lines.lines().nth(1).unwrap().contains("\"id\":\"bafkrei"));
+}
+
+/// Re-encodes a `bafkrei…` CID as a legacy base58btc multihash (`Qm…`).
+fn legacy_multihash(cid: &str) -> String {
+    const BASE32: &[u8] = b"abcdefghijklmnopqrstuvwxyz234567";
+    const BASE58: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    let mut bytes = Vec::new();
+    let (mut buffer, mut bits) = (0u32, 0);
+    for c in cid[1..].bytes() {
+        buffer = (buffer << 5) | u32::try_from(BASE32.iter().position(|&b| b == c).unwrap()).unwrap();
+        bits += 5;
+        if bits >= 8 {
+            bits -= 8;
+            bytes.push(u8::try_from((buffer >> bits) & 0xff).unwrap());
+        }
+    }
+    // Drop the CIDv1 + raw codec prefix, keeping the multihash.
+    let multihash = &bytes[2..];
+    let mut digits = vec![0u32];
+    for &byte in multihash {
+        let mut carry = u32::from(byte);
+        for digit in &mut digits {
+            carry += *digit << 8;
+            *digit = carry % 58;
+            carry /= 58;
+        }
+        while carry > 0 {
+            digits.push(carry % 58);
+            carry /= 58;
+        }
+    }
+    digits.iter().rev().map(|&d| char::from(BASE58[d as usize])).collect()
 }
 
 #[test]
 fn convert_formats() {
     let env = Env::new();
-    let atom = r#"{"source":"alice","target":"bob","content":"sushi","value":"1"}"#;
+    let atom = r#"{"source":"did:web:alice.example","target":"urn:bob","content":"sushi","value":"1"}"#;
 
     let canonical = env.run(&["convert", "--to", "canonical"], atom);
-    assert_eq!(canonical, "{\"content\":\"sushi\",\"source\":\"alice\",\"target\":\"bob\",\"value\":\"1\"}\n");
+    assert_eq!(
+        canonical,
+        "{\"content\":\"sushi\",\"source\":\"did:web:alice.example\",\"target\":\"urn:bob\",\"value\":\"1\"}\n"
+    );
 
     let credential = env.run(&["convert", "--to", "credential"], atom);
     assert!(credential.contains("TrustAtomCredential"));
@@ -168,13 +276,17 @@ fn convert_formats() {
 fn reads_ndjson_files_and_concatenated_json() {
     let env = Env::new();
     let path = env.home.path().join("atoms.json");
-    std::fs::write(&path, "{\"source\":\"a\",\"target\":\"b\"}\n\n{\"source\":\"a\",\"target\":\"c\"} {\"source\":\"a\",\"target\":\"d\"}").unwrap();
+    std::fs::write(
+        &path,
+        "{\"source\":\"urn:a\",\"target\":\"urn:b\"}\n\n{\"source\":\"urn:a\",\"target\":\"urn:c\"} {\"source\":\"urn:a\",\"target\":\"urn:d\"}",
+    )
+    .unwrap();
     assert_eq!(env.run(&["id", path.to_str().unwrap()], "").lines().count(), 3);
 
     env.cmd().args(["id", "missing.json"]).assert().failure().stderr(predicate::str::contains("missing.json"));
     env.cmd()
         .arg("id")
-        .write_stdin("{\"source\":\"a\",\"target\":\"b\"} {oops")
+        .write_stdin("{\"source\":\"urn:a\",\"target\":\"urn:b\"} {oops")
         .assert()
         .failure()
         .stderr(predicate::str::contains("item 2"));
@@ -185,22 +297,25 @@ fn reads_ndjson_files_and_concatenated_json() {
 fn store_and_query() {
     let env = Env::new();
     env.new_key("default");
-    let signed = env.run(&["atom", "-t", "bob", "-c", "sushi, ramen", "-v", "1", "--sign"], "");
-    let plain = env.run(&["atom", "-s", "carol", "-t", "bob", "-c", "rust", "-v", "0.5"], "");
+    let signed = env.run(&["atom", "-t", "did:web:bob.example", "-c", "sushi, ramen", "-v", "1", "--sign"], "");
+    let plain =
+        env.run(&["atom", "-s", "did:web:carol.example", "-t", "did:web:bob.example", "-c", "rust", "-v", "0.5"], "");
 
     let added = env.json_lines(&["add"], &format!("{signed}{plain}"));
     assert_eq!(added.len(), 2);
     assert_eq!((added[0]["added"].clone(), added[0]["signed"].clone()), (json!(true), json!(true)));
+    assert_eq!(added[0]["credentialId"], env.run(&["id", "--credential"], &signed).trim());
     assert_eq!(added[1]["signed"], false);
+    assert!(added[1].get("credentialId").is_none());
     // Adding again is a no-op.
     assert_eq!(env.json_lines(&["add"], &signed)[0]["added"], false);
 
     assert_eq!(env.json_lines(&["query"], "").len(), 2);
     assert_eq!(env.json_lines(&["query", "--topic", "ramen"], "").len(), 1);
-    assert_eq!(env.json_lines(&["query", "--source", "carol"], "")[0]["content"], "rust");
+    assert_eq!(env.json_lines(&["query", "--source", "did:web:carol.example"], "")[0]["content"], "rust");
     assert_eq!(env.json_lines(&["query", "--signed-only"], "").len(), 1);
     let full = &env.json_lines(&["query", "--signed-only", "--full"], "")[0];
-    assert!(full["id"].as_str().unwrap().starts_with("Qm"));
+    assert!(full["id"].as_str().unwrap().starts_with("bafkrei"));
     assert!(full["credential"]["proof"].is_object());
 
     // Forged credentials never reach the store.
@@ -256,6 +371,6 @@ fn info_and_completions() {
 #[test]
 fn pretty_output() {
     let env = Env::new();
-    let out = env.run(&["--pretty", "atom", "-s", "a", "-t", "b", "--no-timestamp"], "");
-    assert_eq!(out, "{\n  \"source\": \"a\",\n  \"target\": \"b\"\n}\n");
+    let out = env.run(&["--pretty", "atom", "-s", "urn:a", "-t", "urn:b", "--no-timestamp"], "");
+    assert_eq!(out, "{\n  \"source\": \"urn:a\",\n  \"target\": \"urn:b\"\n}\n");
 }

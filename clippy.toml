@@ -1,2 +1,4 @@
 allow-unwrap-in-tests = true
 allow-expect-in-tests = true
+# Words that are not code in doc comments (".." keeps clippy's defaults).
+doc-valid-idents = ["CIDv1", ".."]

@@ -1,0 +1,20 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "@protected": true,
+    "TrustAtomCredential": "https://trustgraph.net/ns#TrustAtomCredential",
+    "content": "https://trustgraph.net/ns#content",
+    "value": {
+      "@id": "https://trustgraph.net/ns#value",
+      "@type": "http://www.w3.org/2001/XMLSchema#decimal"
+    },
+    "extra": {
+      "@id": "https://trustgraph.net/ns#extra",
+      "@type": "@json"
+    },
+    "replaces": {
+      "@id": "https://trustgraph.net/ns#replaces",
+      "@type": "@id"
+    }
+  }
+}

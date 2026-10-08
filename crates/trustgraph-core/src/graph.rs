@@ -436,15 +436,18 @@ mod tests {
 
     #[test]
     fn rollups_are_valid_atoms() {
-        let atoms = [about("alice", "bob", "1", "sushi"), about("bob", "bar", "0.8", "sushi")];
+        let atoms = [
+            about("did:key:alice", "did:key:bob", "1", "sushi"),
+            about("did:key:bob", "https://bar.example", "0.8", "sushi"),
+        ];
         let graph: TrustGraph = atoms.iter().collect();
         let options = LensOptions { topic: Some("sushi".into()), ..LensOptions::default() };
-        let entries = graph.lens("alice", &options);
-        let rollups = TrustGraph::rollup("alice", &entries, &options, Timestamp::UNIX_EPOCH).unwrap();
+        let entries = graph.lens("did:key:alice", &options);
+        let rollups = TrustGraph::rollup("did:key:alice", &entries, &options, Timestamp::UNIX_EPOCH).unwrap();
         assert_eq!(rollups.len(), 2);
         for atom in &rollups {
             atom.validate().unwrap();
-            assert_eq!(atom.source, "alice");
+            assert_eq!(atom.source, "did:key:alice");
             assert_eq!(atom.content.as_deref(), Some("sushi"));
             assert_eq!(atom.extra["rollup"], "agent-lens");
         }

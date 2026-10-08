@@ -9,8 +9,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
 use crate::{Error, Result};
 
-/// Number of significant figures a [`Value`] keeps.
-pub const SIGNIFICANT_FIGURES: u32 = 9;
+/// Number of decimal places a [`Value`] keeps.
+pub const DECIMAL_PLACES: u32 = 9;
 
 /// A trust rating in the range `-1..=1`.
 ///
@@ -18,10 +18,16 @@ pub const SIGNIFICANT_FIGURES: u32 = 9;
 /// - `0` means neutral
 /// - `-1` means full distrust
 ///
-/// Values are kept as exact decimals, rounded to nine significant figures
-/// (half away from zero), so that the same input always produces the same
-/// bytes when serialized, hashed or signed. Ratings on other scales can be
+/// Values are kept as exact decimals, rounded to nine decimal places (half
+/// away from zero), so that the same input always produces the same bytes
+/// when serialized, hashed or signed. Ratings on other scales can be
 /// converted with [`Value::from_scale`].
+///
+/// The canonical form (what [`Display`](fmt::Display) and serialization
+/// write) is an `xsd:decimal` with no exponent, no `+`, no trailing zeros,
+/// at most nine fractional digits, and `0` for zero: `1`, `0.9`, `-0.25`.
+/// Signed credentials must carry the value in exactly this form; see
+/// [`Value::parse_canonical`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Value(Decimal);
 
@@ -33,15 +39,13 @@ impl Value {
     /// Full distrust.
     pub const MIN: Self = Self(Decimal::NEGATIVE_ONE);
 
-    /// Builds a value from a decimal, rounding to nine significant figures.
+    /// Builds a value from a decimal, rounding to nine decimal places.
     ///
     /// # Errors
     ///
     /// Returns [`Error::InvalidValue`] if the rounded value is outside `-1..=1`.
     pub fn new(decimal: Decimal) -> Result<Self> {
-        let rounded = decimal
-            .round_sf_with_strategy(SIGNIFICANT_FIGURES, RoundingStrategy::MidpointAwayFromZero)
-            .ok_or_else(|| invalid(decimal.to_string(), "cannot be rounded"))?;
+        let rounded = decimal.round_dp_with_strategy(DECIMAL_PLACES, RoundingStrategy::MidpointAwayFromZero);
         if rounded > Decimal::ONE || rounded < Decimal::NEGATIVE_ONE {
             return Err(invalid(decimal.to_string(), "must be in the range -1..=1"));
         }
@@ -86,6 +90,21 @@ impl Value {
     pub fn from_f64(f: f64) -> Result<Self> {
         let decimal = Decimal::from_f64_retain(f).ok_or_else(|| invalid(f.to_string(), "not a finite number"))?;
         Self::new(decimal)
+    }
+
+    /// Parses a value that must already be in canonical form (e.g. `"0.9"`,
+    /// not `"0.90"`, `".9"` or `"9e-1"`), as signed credentials require.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::InvalidValue`] if `s` is not a value, or is not
+    /// written canonically.
+    pub fn parse_canonical(s: &str) -> Result<Self> {
+        let value: Self = s.parse()?;
+        if value.to_string() != s {
+            return Err(invalid(s.to_owned(), "not in canonical form (e.g. `0.9`, `-1`, `0`)"));
+        }
+        Ok(value)
     }
 
     /// True if the value expresses positive trust.
@@ -197,11 +216,26 @@ mod tests {
     }
 
     #[test]
-    fn rounds_to_nine_significant_figures() {
+    fn rounds_to_nine_decimal_places() {
         assert_eq!(v("0.534857395723489529357489283").to_string(), "0.534857396");
         assert_eq!(v("0.8999999995").to_string(), "0.9");
         assert_eq!(v("0.8999999994").to_string(), "0.899999999");
         assert_eq!(v("-0.9000000005").to_string(), "-0.900000001");
+        assert_eq!(v("0.0000000004").to_string(), "0");
+        assert_eq!(v("-0.0000000004").to_string(), "0");
+        assert_eq!(v("0.0123456789").to_string(), "0.012345679");
+        assert_eq!(v("0.000000001").to_string(), "0.000000001");
+        assert_eq!(v("1.0000000004").to_string(), "1");
+    }
+
+    #[test]
+    fn canonical_form() {
+        for s in ["0", "1", "-1", "0.9", "-0.25", "0.000000001", "-0.999999999"] {
+            assert_eq!(Value::parse_canonical(s).unwrap().to_string(), s);
+        }
+        for s in ["0.90", ".9", "-0", "1.0", "00.5", "0.0000000001", "-0.0", "+1"] {
+            assert!(Value::parse_canonical(s).is_err(), "{s}");
+        }
     }
 
     #[test]

@@ -31,8 +31,9 @@ Everything rests on one pure Rust core, shipped as a command line tool
   Cloudflare Workers, Deno, Node, and inside reactive database queries such as
   Convex's. See [architecture](doc/architecture.md).
 
-> Status: early but solid. The data formats may still change before 1.0. See the
-> [roadmap](doc/plan/README.md).
+> Status: early but solid. The **v1 data format is locked**: see the
+> [protocol](doc/protocol.md). The tools and APIs may still change before 1.0;
+> see the [roadmap](doc/plan/README.md).
 
 ## Install
 
@@ -87,10 +88,10 @@ trust lens --topic sushi --rollup | trust sign | trust add
 | Command | What it does |
 |---|---|
 | `trust key new\|list\|show\|export\|import` | Manage identities (Ed25519, `did:key`) |
-| `trust atom -t TARGET [-v VALUE] [-c CONTENT] [--sign]` | Create a Trust Atom. `VALUE` is `-1..=1` or `RATING/BEST` such as `4/5` |
+| `trust atom -t TARGET [-v VALUE] [-c CONTENT] [--replaces ID] [--sign]` | Create a Trust Atom. `VALUE` is `-1..=1` or `RATING/BEST` such as `4/5` |
 | `trust sign [FILE]` | Sign atoms as Verifiable Credentials |
 | `trust verify [FILE]` | Verify credentials. Exits 1 if any are invalid |
-| `trust id [FILE]` | Print content IDs (`Qm…` SHA2-256 multihashes) |
+| `trust id [--credential] [FILE]` | Print atom IDs, or credential IDs (CIDv1, `bafkrei…`) |
 | `trust convert --to atom\|credential\|canonical [FILE]` | Convert between formats |
 | `trust add [FILE]` | Add atoms or signed credentials to the local store |
 | `trust query [--source] [--target] [--topic] [--signed-only]` | Search the local store |
@@ -105,7 +106,9 @@ and the store live in the platform data directory, or in `$TRUST_HOME`.
 
 ## Data model
 
-A Trust Atom:
+The v1 format is specified in [`doc/protocol.md`](doc/protocol.md), with a
+[JSON-LD context](schema/v1/context.jsonld), [vocabulary](schema/v1/index.html),
+[JSON Schemas](schema) and [golden test vectors](test-vectors). A Trust Atom:
 
 ```json
 {
@@ -118,13 +121,29 @@ A Trust Atom:
 }
 ```
 
-Only `source` and `target` are required. `value` is an exact decimal in
-`-1..=1`, rounded to nine significant figures. It is written as a string so it
-hashes identically everywhere, but numbers are accepted on input.
+- Only `source` and `target` are required, and both are absolute URIs (a
+  DID, an `https:` URL, a `urn:`, …).
+- `value` is an exact decimal in `-1..=1` (negative is distrust), rounded to
+  nine decimal places. It is written as a string so it hashes identically
+  everywhere; numbers are accepted on input.
+- `replaces` (optional) withdraws an earlier credential of yours, by its
+  credential ID. Otherwise, for one source, target and content, the latest
+  timestamp wins.
+- `extra` holds your own string fields.
 
-Signed, it becomes a Verifiable Credential: `source` is the `issuer`,
-`target` is the `credentialSubject.id`, and `timestamp` is `validFrom`.
-Verification checks that the issuer is the key that signed it.
+Signed, an atom becomes a [W3C Verifiable Credential 2.0](https://www.w3.org/TR/vc-data-model-2.0/):
+`source` is the `issuer`, `target` the `credentialSubject.id`, and
+`timestamp` the `validFrom`. Its `@context` is
+`["https://www.w3.org/ns/credentials/v2", "https://trustgraph.net/ns/v1"]`,
+and every term is defined, so JSON-LD tools in safe mode accept it.
+Verification checks the signature, that the issuer is the key that signed
+it, and the strict v1 profile. CI proves that Digital Bazaar's
+`@digitalbazaar/vc` verifies our credentials and that we verify theirs.
+
+IDs are [CIDv1](https://dasl.ing/cid.html) (`bafkrei…`), the same as IPFS
+gives for the same bytes. The **atom ID** names the statement however it is
+signed; the **credential ID** names one exact signed credential. Older
+`Qm…` IDs are still accepted everywhere, including in an existing store.
 
 ### How the lens works
 
@@ -151,7 +170,8 @@ fn main() -> Result<(), trustgraph_core::Error> {
     let alice = Keypair::from_seed(&[7; 32]); // or Keypair::generate() with the `random` feature
     let atom = TrustAtom::new(alice.did().to_string(), "https://sushi.example")
         .with_content("sushi")
-        .with_value("0.9".parse()?);
+        .with_value("0.9".parse()?)
+        .with_timestamp("2026-01-01T00:00:00Z".parse().unwrap());
     let signed = credential::sign_atom(&atom, &alice, "2026-01-01T00:00:00Z".parse().unwrap())?;
     assert_eq!(credential::verify_atom(&signed)?, atom);
 
@@ -175,7 +195,7 @@ const credential = tg.signAtom(
   me.secretKeyMultibase,
   new Date().toISOString(),
 );
-tg.verify(credential); // { valid: true, id: "Qm…", issuer: "did:key:…", atom: {…} }
+tg.verify(credential); // { valid: true, id: "bafkrei…", credentialId: "bafkrei…", issuer: "did:key:…", atom: {…} }
 tg.lens([credential /* , …everyone else's atoms */], me.did, { topic: "sushi" });
 ```
 
@@ -188,10 +208,11 @@ tg.lens([credential /* , …everyone else's atoms */], me.did, { topic: "sushi" 
 | [`crates/trustgraph-wasm`](crates/trustgraph-wasm) | Rust → npm | `@trustgraph/trustgraph-wasm` (wasm-bindgen) |
 | [`crates/trustgraph-node`](crates/trustgraph-node) | Rust → npm | `@trustgraph/trustgraph` (napi-rs) |
 | [`bindings/`](bindings) | TypeScript | Types shared by both npm packages |
-| [`tests/js/`](tests/js) | JavaScript | One smoke test run against every JavaScript build, plus a benchmark |
+| [`tests/js/`](tests/js) | JavaScript | One smoke test run against every JavaScript build, an interop test against Digital Bazaar's VC libraries, and a benchmark |
+| [`schema/`](schema) | JSON-LD, JSON Schema | The published [v1](schema/v1) context, vocabulary and schemas; [`legacy-2017/`](schema/legacy-2017), the 2017 `TrustClaim` context (historical) |
+| [`test-vectors/`](test-vectors) | JSON | Golden atoms, credentials and IDs |
 | [`scripts/`](scripts) | Shell | Core purity check, WebAssembly packaging |
-| [`doc/`](doc) | | [Architecture](doc/architecture.md), [roadmap](doc/plan/README.md), and the [original protocol text](doc/protocol/README.md) (historical) |
-| [`schema/`](schema) | JSON-LD | [`legacy-2017/`](schema/legacy-2017): the 2017 `TrustClaim` context (historical) |
+| [`doc/`](doc) | | [Protocol](doc/protocol.md), [architecture](doc/architecture.md), [roadmap](doc/plan/README.md), [research](doc/research), and the [original protocol text](doc/protocol/README.md) (historical) |
 
 New projects go in this repo:
 
@@ -228,7 +249,10 @@ scripts/build-wasm-package.sh             # WebAssembly package → target/npm/t
 pnpm run typecheck
 ```
 
-The signing code is checked against the W3C `eddsa-jcs-2022` test vectors.
+The signing code is checked against the W3C `eddsa-jcs-2022` test vectors
+and the repo's own [golden vectors](test-vectors). After building the
+WebAssembly package, `node tests/js/interop.mjs target/npm/trustgraph-wasm/node/trustgraph_wasm.cjs`
+checks interoperability with Digital Bazaar's VC libraries.
 
 ## License
 

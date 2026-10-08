@@ -1,0 +1,67 @@
+{
+  "@context": {
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dcterms": "http://purl.org/dc/terms/",
+    "cred": "https://www.w3.org/2018/credentials#",
+    "tg": "https://trustgraph.net/ns#",
+    "id": "@id",
+    "type": "@type",
+    "label": { "@id": "rdfs:label", "@language": "en" },
+    "comment": { "@id": "rdfs:comment", "@language": "en" },
+    "subClassOf": { "@id": "rdfs:subClassOf", "@type": "@id" },
+    "domain": { "@id": "rdfs:domain", "@type": "@id" },
+    "range": { "@id": "rdfs:range", "@type": "@id" },
+    "seeAlso": { "@id": "rdfs:seeAlso", "@type": "@id" },
+    "isDefinedBy": { "@id": "rdfs:isDefinedBy", "@type": "@id" },
+    "title": { "@id": "dcterms:title", "@language": "en" },
+    "description": { "@id": "dcterms:description", "@language": "en" },
+    "versionInfo": "owl:versionInfo",
+    "defines": { "@reverse": "rdfs:isDefinedBy", "@type": "@id" }
+  },
+  "id": "https://trustgraph.net/ns#",
+  "type": "owl:Ontology",
+  "title": "Trust Graph vocabulary",
+  "description": "Terms for Trust Atoms: signed statements that a source trusts a target, about some content, to a degree between -1 and 1. Used through the JSON-LD context https://trustgraph.net/ns/v1.",
+  "versionInfo": "1",
+  "seeAlso": ["https://trustgraph.net/ns/v1", "https://github.com/trustgraph/trustgraph-rust-cli/blob/master/doc/protocol.md"],
+  "defines": [
+    {
+      "id": "tg:TrustAtomCredential",
+      "type": "rdfs:Class",
+      "label": "Trust Atom credential",
+      "comment": "A Verifiable Credential in which the issuer states that it trusts the credential subject, about tg:content, to the degree tg:value. Comparable to CAIP-261 PeerTrustCredential and to an RFC 7071 reputon.",
+      "subClassOf": "cred:VerifiableCredential"
+    },
+    {
+      "id": "tg:content",
+      "type": "rdf:Property",
+      "label": "content",
+      "comment": "What the trust is about: a topic, comma-separated tags, or a URI. Comparable to CAIP-261 scope, a DIF Trust Establishment topic, a LinkedClaims aspect, schema:reviewAspect, and the reputon assertion.",
+      "range": "xsd:string"
+    },
+    {
+      "id": "tg:value",
+      "type": "rdf:Property",
+      "label": "value",
+      "comment": "How much the issuer trusts the subject, from -1 (full distrust) through 0 (neutral) to 1 (full trust), with at most nine decimal places. Comparable to CAIP-261 level and schema:ratingValue with worstRating -1 and bestRating 1; an RFC 7071 reputon rating is (value + 1) / 2.",
+      "range": "xsd:decimal"
+    },
+    {
+      "id": "tg:extra",
+      "type": "rdf:Property",
+      "label": "extra",
+      "comment": "Application-specific fields, as a JSON object of strings. Opaque to RDF.",
+      "range": "rdf:JSON"
+    },
+    {
+      "id": "tg:replaces",
+      "type": "rdf:Property",
+      "label": "replaces",
+      "comment": "The credential this one supersedes, as ipfs:// and its credential ID (a CIDv1). Only effective when both credentials have the same issuer. Comparable to CAIP-261 previousVersion.",
+      "range": "rdfs:Resource"
+    }
+  ]
+}

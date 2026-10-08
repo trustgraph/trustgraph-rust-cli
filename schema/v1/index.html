@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trust Graph vocabulary</title>
+<meta name="description" content="The Trust Graph vocabulary (https://trustgraph.net/ns#) and its JSON-LD context (https://trustgraph.net/ns/v1).">
+<link rel="alternate" type="application/ld+json" href="vocab.jsonld">
+<script type="application/ld+json">
+{
+  "@context": {
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "cred": "https://www.w3.org/2018/credentials#",
+    "tg": "https://trustgraph.net/ns#"
+  },
+  "@graph": [
+    { "@id": "tg:TrustAtomCredential", "@type": "rdfs:Class", "rdfs:subClassOf": { "@id": "cred:VerifiableCredential" },
+      "rdfs:label": "Trust Atom credential" },
+    { "@id": "tg:content", "@type": "rdf:Property", "rdfs:range": { "@id": "xsd:string" }, "rdfs:label": "content" },
+    { "@id": "tg:value", "@type": "rdf:Property", "rdfs:range": { "@id": "xsd:decimal" }, "rdfs:label": "value" },
+    { "@id": "tg:extra", "@type": "rdf:Property", "rdfs:range": { "@id": "rdf:JSON" }, "rdfs:label": "extra" },
+    { "@id": "tg:replaces", "@type": "rdf:Property", "rdfs:range": { "@id": "rdfs:Resource" }, "rdfs:label": "replaces" }
+  ]
+}
+</script>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d1d1b; --muted: #5f5e58; --rule: #e3e0d8;
+    --code-bg: #f1eee6; --accent: #2457a6; --card: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151514; --fg: #ecebe6; --muted: #a8a69e; --rule: #2e2d2a;
+      --code-bg: #22211e; --accent: #8db4ef; --card: #1b1b19;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #151514; --fg: #ecebe6; --muted: #a8a69e; --rule: #2e2d2a;
+    --code-bg: #22211e; --accent: #8db4ef; --card: #1b1b19;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 46rem; margin: 0 auto; padding: 3rem 16px 4rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .5rem; letter-spacing: -0.01em; }
+  h2 { font-size: 1.25rem; margin: 2.5rem 0 .75rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+  h3 { font-size: 1.05rem; margin: 0 0 .25rem; }
+  p.lede { color: var(--muted); margin: 0 0 1.5rem; font-size: 1.05rem; }
+  a { color: var(--accent); }
+  code, pre { font: 0.88em/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { background: var(--code-bg); padding: .1em .3em; border-radius: 4px; overflow-wrap: anywhere; }
+  pre { background: var(--code-bg); padding: 1rem; border-radius: 8px; overflow-x: auto; }
+  pre code { background: none; padding: 0; }
+  dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; margin: 0 0 1rem; }
+  dl.facts dt { color: var(--muted); }
+  dl.facts dd { margin: 0; min-width: 0; }
+  section.term { background: var(--card); border: 1px solid var(--rule); border-radius: 10px; padding: 1rem 1.25rem; margin: 1rem 0; }
+  section.term:target { outline: 2px solid var(--accent); }
+  section.term p { margin: .5rem 0 0; }
+  .iri { color: var(--muted); font-size: .9rem; }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+  th, td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Trust Graph vocabulary</h1>
+  <p class="lede">Terms for Trust Atoms: signed statements that a <em>source</em> trusts a
+  <em>target</em>, about some <em>content</em>, to a degree between −1 and 1.</p>
+
+  <dl class="facts">
+    <dt>Namespace</dt><dd><code>https://trustgraph.net/ns#</code></dd>
+    <dt>JSON-LD context</dt><dd><a href="https://trustgraph.net/ns/v1"><code>https://trustgraph.net/ns/v1</code></a> (immutable)</dd>
+    <dt>Context SHA-256</dt><dd><code>7bced52382109d0e6743e26766a23a7761ab8a387d248f4ee054d2d949794641</code></dd>
+    <dt>digestMultibase</dt><dd><code>uEiB7ztUjghCdDmdD4mdmojp3YauKOH0kj07gVNLZSXlGQQ</code></dd>
+    <dt>Machine-readable</dt><dd><a href="vocab.jsonld">vocab.jsonld</a> (RDFS, JSON-LD)</dd>
+    <dt>Specification</dt><dd><a href="https://github.com/trustgraph/trustgraph-rust-cli/blob/master/doc/protocol.md">Trust Graph protocol, v1</a></dd>
+  </dl>
+
+  <h2>Terms</h2>
+
+  <section class="term" id="TrustAtomCredential">
+    <h3>TrustAtomCredential</h3>
+    <div class="iri"><code>https://trustgraph.net/ns#TrustAtomCredential</code> · class, subclass of <code>cred:VerifiableCredential</code></div>
+    <p>A Verifiable Credential in which the issuer states that it trusts the credential
+    subject, about <a href="#content">content</a>, to the degree <a href="#value">value</a>.
+    Comparable to CAIP-261 <code>PeerTrustCredential</code> and to an RFC 7071 reputon.</p>
+  </section>
+
+  <section class="term" id="content">
+    <h3>content</h3>
+    <div class="iri"><code>https://trustgraph.net/ns#content</code> · property, range <code>xsd:string</code></div>
+    <p>What the trust is about: a topic, comma-separated tags, or a URI. Comparable to
+    CAIP-261 <code>scope</code>, a DIF Trust Establishment topic, a LinkedClaims
+    <code>aspect</code>, <code>schema:reviewAspect</code> and the reputon <code>assertion</code>.</p>
+  </section>
+
+  <section class="term" id="value">
+    <h3>value</h3>
+    <div class="iri"><code>https://trustgraph.net/ns#value</code> · property, range <code>xsd:decimal</code></div>
+    <p>How much the issuer trusts the subject: from <code>-1</code> (full distrust) through
+    <code>0</code> (neutral) to <code>1</code> (full trust), written as a canonical decimal string
+    with at most nine decimal places (<code>"0.8"</code>, never <code>0.8</code> or <code>"0.80"</code>).
+    Comparable to CAIP-261 <code>level</code> and to <code>schema:ratingValue</code> with
+    <code>worstRating</code> −1 and <code>bestRating</code> 1; a reputon rating is (value + 1) / 2.</p>
+  </section>
+
+  <section class="term" id="extra">
+    <h3>extra</h3>
+    <div class="iri"><code>https://trustgraph.net/ns#extra</code> · property, range <code>rdf:JSON</code> (<code>@json</code>)</div>
+    <p>Application-specific fields, as a JSON object with string values. Opaque to RDF,
+    so its keys never become undefined terms.</p>
+  </section>
+
+  <section class="term" id="replaces">
+    <h3>replaces</h3>
+    <div class="iri"><code>https://trustgraph.net/ns#replaces</code> · property, range IRI (<code>@id</code>)</div>
+    <p>The credential this one supersedes, as <code>ipfs://</code> and its credential ID
+    (a CIDv1, <code>bafkrei…</code>). Only effective when both credentials have the same
+    issuer. Comparable to CAIP-261 <code>previousVersion</code>.</p>
+  </section>
+
+  <h2>The context</h2>
+  <p>Served at <code>https://trustgraph.net/ns/v1</code> as <code>application/ld+json</code>.
+  Verifiers bundle it and never fetch it.</p>
+<pre><code>{
+  "@context": {
+    "@version": 1.1,
+    "@protected": true,
+    "TrustAtomCredential": "https://trustgraph.net/ns#TrustAtomCredential",
+    "content": "https://trustgraph.net/ns#content",
+    "value": {
+      "@id": "https://trustgraph.net/ns#value",
+      "@type": "http://www.w3.org/2001/XMLSchema#decimal"
+    },
+    "extra": {
+      "@id": "https://trustgraph.net/ns#extra",
+      "@type": "@json"
+    },
+    "replaces": {
+      "@id": "https://trustgraph.net/ns#replaces",
+      "@type": "@id"
+    }
+  }
+}</code></pre>
+
+  <h2>Example</h2>
+<pre><code>{
+  "@context": [
+    "https://www.w3.org/ns/credentials/v2",
+    "https://trustgraph.net/ns/v1"
+  ],
+  "type": ["VerifiableCredential", "TrustAtomCredential"],
+  "issuer": "did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2",
+  "validFrom": "2026-10-08T12:00:00Z",
+  "credentialSubject": {
+    "id": "did:web:alice.example",
+    "content": "rust code review",
+    "value": "0.8",
+    "extra": { "via": "meetup" }
+  },
+  "proof": { "type": "DataIntegrityProof", "cryptosuite": "eddsa-jcs-2022", "…": "…" }
+}</code></pre>
+
+  <h2>Other files</h2>
+  <div class="table-wrap">
+  <table>
+    <tr><th>URL</th><th>What</th></tr>
+    <tr><td><code>/schemas/v1/trust-atom.schema.json</code></td><td>JSON Schema 2020-12 for atoms</td></tr>
+    <tr><td><code>/schemas/v1/trust-atom-credential.schema.json</code></td><td>JSON Schema 2020-12 for credentials</td></tr>
+  </table>
+  </div>
+</main>
+</body>
+</html>

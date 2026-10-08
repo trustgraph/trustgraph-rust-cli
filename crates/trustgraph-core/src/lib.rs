@@ -7,7 +7,9 @@
 //!   regarding *content*, to the degree *value* (`-1..=1`).
 //! - [`Keypair`] / [`Did`]: Ed25519 identities as `did:key` DIDs.
 //! - [`credential`]: signed atoms as W3C Verifiable Credentials 2.0, using
-//!   the `eddsa-jcs-2022` cryptosuite.
+//!   the `eddsa-jcs-2022` cryptosuite, in the strict v1 profile.
+//! - [`ContentId`]: atom and credential IDs, CIDv1 (`bafkrei…`).
+//! - [`context`]: the bundled Trust Graph v1 JSON-LD context.
 //! - [`TrustGraph`]: the **Agent Lens**, everything one agent can see
 //!   through the **Trust Cascade** of the agents they trust.
 //! - [`Record`] / [`Query`]: verified atoms and filters over them.
@@ -26,7 +28,8 @@
 //! let alice = Keypair::from_seed(&[7; 32]); // use a random seed in practice
 //! let atom = TrustAtom::new(alice.did().to_string(), "https://example.com/sushi-bar")
 //!     .with_content("sushi")
-//!     .with_value("0.9".parse()?);
+//!     .with_value("0.9".parse()?)
+//!     .with_timestamp("2026-01-01T00:00:00Z".parse().unwrap());
 //!
 //! let signed = credential::sign_atom(&atom, &alice, "2026-01-01T00:00:00Z".parse().unwrap())?;
 //! assert_eq!(credential::verify_atom(&signed)?, atom);
@@ -36,6 +39,7 @@
 pub mod api;
 pub mod atom;
 pub mod canonical;
+pub mod context;
 pub mod credential;
 pub mod error;
 pub mod graph;
@@ -51,7 +55,7 @@ pub use error::{Error, Result};
 pub use graph::{LensEntry, LensOptions, TrustGraph};
 pub use id::ContentId;
 pub use keys::{Did, Keypair, PublicKey};
-pub use record::{Query, Record};
+pub use record::{Query, Record, Supersession};
 pub use value::Value;
 
 /// Compiles and runs the Rust examples in the repository README, so they

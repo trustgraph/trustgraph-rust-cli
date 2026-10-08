@@ -7,9 +7,11 @@ use clap::CommandFactory;
 use jiff::{Timestamp, Unit};
 use serde_json::{Value as Json, json};
 use trustgraph_core::api;
-use trustgraph_core::{Keypair, LensOptions, Query, Record, TrustAtom, TrustGraph, credential};
+use trustgraph_core::{Keypair, LensOptions, Query, Record, Supersession, TrustAtom, TrustGraph, credential};
 
-use crate::cli::{AtomArgs, Cli, Command, ConvertArgs, Format, InputArgs, KeyCommand, LensArgs, QueryArgs, SignArgs};
+use crate::cli::{
+    AtomArgs, Cli, Command, ConvertArgs, Format, IdArgs, InputArgs, KeyCommand, LensArgs, QueryArgs, SignArgs,
+};
 use crate::home::Home;
 use crate::io::{Output, read_json};
 
@@ -101,6 +103,7 @@ fn atom<W: Write>(home: &Home, args: AtomArgs, out: &mut Output<W>) -> Result<Ou
     let mut atom = TrustAtom::new(source, args.target);
     atom.content = args.content;
     atom.value = args.value;
+    atom.replaces = args.replaces;
     atom.extra = args.extra.into_iter().collect();
     if !args.no_timestamp {
         atom.timestamp = Some(args.timestamp.unwrap_or_else(now));
@@ -151,9 +154,18 @@ fn verify<W: Write>(args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
     Ok(outcome)
 }
 
-fn id<W: Write>(args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
-    for atom in atoms_from(args)? {
-        out.line(&atom.id()?.to_string())?;
+fn id<W: Write>(args: &IdArgs, out: &mut Output<W>) -> Result<Outcome> {
+    if args.credential {
+        for (n, json) in read_items(&args.input)? {
+            if json.get("@context").is_none() {
+                bail!("item {n}: not a credential (sign it first, or drop --credential for the atom ID)");
+            }
+            out.line(&api::credential_id(&json).with_context(|| format!("item {n}"))?)?;
+        }
+    } else {
+        for atom in atoms_from(&args.input)? {
+            out.line(&atom.id()?.to_string())?;
+        }
     }
     Ok(Outcome::Success)
 }
@@ -174,9 +186,14 @@ fn add<W: Write>(home: &Home, args: &InputArgs, out: &mut Output<W>) -> Result<O
     let mut store = home.open_store()?;
     for (n, json) in read_items(args)? {
         let record = Record::from_json(json).with_context(|| format!("item {n}"))?;
-        let (id, signed) = (record.id, record.is_signed());
+        let (id, credential_id) = (record.id, record.credential_id()?);
         let added = store.add(record)?;
-        out.json(&json!({ "id": id, "added": added, "signed": signed }))?;
+        match credential_id {
+            Some(credential_id) => {
+                out.json(&json!({ "id": id, "added": added, "signed": true, "credentialId": credential_id }))?;
+            }
+            None => out.json(&json!({ "id": id, "added": added, "signed": false }))?,
+        }
     }
     Ok(Outcome::Success)
 }
@@ -207,7 +224,8 @@ fn lens<W: Write>(home: &Home, args: LensArgs, out: &mut Output<W>) -> Result<Ou
     };
     let store = home.open_store()?;
     let q = Query { signed_only: args.signed_only, ..Query::default() };
-    let graph: TrustGraph = store.query(&q).map(|r| &r.atom).collect();
+    let records: Vec<&Record> = store.query(&q).collect();
+    let graph: TrustGraph = Supersession::current(&records)?.into_iter().map(|r| &r.atom).collect();
     let options = LensOptions { depth: usize::from(args.depth), decay: args.decay, topic: args.topic };
     let mut entries = graph.lens(&agent, &options);
     if let Some(limit) = args.limit {

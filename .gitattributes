@@ -1,0 +1,5 @@
+# Hashed and signed bytes must be identical on every OS: never convert line
+# endings in the published context, schemas or golden test vectors.
+schema/v1/** -text
+test-vectors/** -text
+crates/trustgraph-core/contexts/** -text

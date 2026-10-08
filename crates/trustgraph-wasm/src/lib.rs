@@ -69,7 +69,7 @@ pub fn parse_atom(input: JsValue) -> JsResult<JsValue> {
     to_js(&core(api::parse_atom(from_js(input, "atom")?))?)
 }
 
-/// The content ID (`Qm…`) of an atom or credential.
+/// The atom ID (`bafkrei…`) of an atom, or of the atom in a credential.
 ///
 /// # Errors
 ///
@@ -77,6 +77,38 @@ pub fn parse_atom(input: JsValue) -> JsResult<JsValue> {
 #[wasm_bindgen(js_name = atomId)]
 pub fn atom_id(input: JsValue) -> JsResult<String> {
     core(api::atom_id(from_js(input, "atom")?))
+}
+
+/// The credential ID (`bafkrei…`) of a credential: the CID of its canonical
+/// JSON, proof included.
+///
+/// # Errors
+///
+/// Throws if the input is not a JSON object.
+#[wasm_bindgen(js_name = credentialId)]
+pub fn credential_id(credential: JsValue) -> JsResult<String> {
+    core(api::credential_id(&from_js::<Json>(credential, "credential")?))
+}
+
+/// Converts an ID in any accepted form (`bafkrei…`, legacy `Qm…`,
+/// `ipfs://…`) to `bafkrei…`.
+///
+/// # Errors
+///
+/// Throws if `id` is not a content ID.
+#[wasm_bindgen(js_name = normalizeId)]
+pub fn normalize_id(id: &str) -> JsResult<String> {
+    core(api::normalize_id(id))
+}
+
+/// The DID document of a `did:key`, resolved offline (one `Multikey`).
+///
+/// # Errors
+///
+/// Throws if `did` is not an Ed25519 `did:key`.
+#[wasm_bindgen(js_name = didDocument)]
+pub fn did_document(did: &str) -> JsResult<JsValue> {
+    to_js(&core(api::did_document(did))?)
 }
 
 /// The canonical JSON (RFC 8785) of an atom, exactly as hashed.
@@ -111,7 +143,7 @@ pub fn sign_atom(atom: JsValue, secret_key_multibase: &str, created: &str) -> Js
     to_js(&core(api::sign_atom(from_js(atom, "atom")?, secret_key_multibase, created))?)
 }
 
-/// Verifies a signed credential: `{valid, id?, issuer?, atom?, error?}`.
+/// Verifies a signed credential: `{valid, id?, credentialId?, issuer?, atom?, error?}`.
 ///
 /// # Errors
 ///

@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use jiff::Timestamp;
-use trustgraph_core::Value;
 use trustgraph_core::value::Decimal;
+use trustgraph_core::{ContentId, Value};
 
 /// trust: sign, share and explore trust relationships.
 ///
@@ -52,8 +52,8 @@ pub enum Command {
     /// Verify signed Trust Atom credentials; exits 1 if any are invalid
     Verify(InputArgs),
 
-    /// Print the content ID (a Qm… multihash) of atoms or credentials
-    Id(InputArgs),
+    /// Print the ID (a bafkrei… CIDv1) of atoms or credentials
+    Id(IdArgs),
 
     /// Convert atoms and credentials between formats
     Convert(ConvertArgs),
@@ -123,7 +123,7 @@ pub struct KeyArg {
 
 #[derive(Debug, Args)]
 pub struct AtomArgs {
-    /// Who or what is being rated: a DID, URL, or other identifier
+    /// Who or what is being rated: a DID, URL, or other absolute URI
     #[arg(short, long)]
     pub target: String,
 
@@ -136,9 +136,14 @@ pub struct AtomArgs {
     #[arg(short, long)]
     pub content: Option<String>,
 
-    /// Who is rating [default: the DID of --key]
+    /// Who is rating, as an absolute URI [default: the DID of --key]
     #[arg(short, long)]
     pub source: Option<String>,
+
+    /// The credential this atom supersedes (its credential ID, from
+    /// `trust id --credential`)
+    #[arg(long, value_parser = parse_id, value_name = "CREDENTIAL_ID")]
+    pub replaces: Option<ContentId>,
 
     /// Extra fields, as KEY=VALUE (repeatable)
     #[arg(short, long, value_parser = parse_key_value, value_name = "KEY=VALUE")]
@@ -148,8 +153,8 @@ pub struct AtomArgs {
     #[arg(long, conflicts_with = "no_timestamp")]
     pub timestamp: Option<Timestamp>,
 
-    /// Leave out the timestamp
-    #[arg(long)]
+    /// Leave out the timestamp (signed atoms always have one)
+    #[arg(long, conflicts_with = "sign")]
     pub no_timestamp: bool,
 
     /// Sign the atom, producing a Verifiable Credential
@@ -165,6 +170,17 @@ pub struct InputArgs {
     /// JSON or NDJSON input file; `-` or nothing reads stdin
     #[arg(value_name = "FILE")]
     pub input: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct IdArgs {
+    #[command(flatten)]
+    pub input: InputArgs,
+
+    /// Print the credential ID (of the exact signed credential) instead of
+    /// the atom ID (of the statement, however it is signed)
+    #[arg(long)]
+    pub credential: bool,
 }
 
 #[derive(Debug, Args)]
@@ -270,6 +286,10 @@ fn parse_value(s: &str) -> Result<Value, String> {
     s.parse().map_err(|e: trustgraph_core::Error| e.to_string())
 }
 
+fn parse_id(s: &str) -> Result<ContentId, String> {
+    ContentId::from_iri(s).map_err(|e| e.to_string())
+}
+
 fn parse_decay(s: &str) -> Result<f64, String> {
     let decay: f64 = s.parse().map_err(|_| format!("`{s}` is not a number"))?;
     if (0.0..=1.0).contains(&decay) { Ok(decay) } else { Err("must be between 0 and 1".into()) }
@@ -321,6 +341,15 @@ mod tests {
         assert!(parse_key_name("work-2").is_ok());
         assert!(parse_key_name("../etc").is_err());
         assert!(parse_key_name("").is_err());
+    }
+
+    #[test]
+    fn ids_in_any_form() {
+        let id = ContentId::of_bytes(b"x");
+        for form in [id.to_string(), id.to_legacy_string(), id.to_iri()] {
+            assert_eq!(parse_id(&form).unwrap(), id);
+        }
+        assert!(parse_id("nope").is_err());
     }
 
     #[test]

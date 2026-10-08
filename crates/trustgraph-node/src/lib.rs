@@ -59,10 +59,28 @@ pub fn parse_atom(input: Value) -> Result<Value> {
     json(&core(api::parse_atom(input))?)
 }
 
-/// The content ID (`Qm…`) of an atom or credential.
+/// The atom ID (`bafkrei…`) of an atom, or of the atom in a credential.
 #[napi]
 pub fn atom_id(input: Value) -> Result<String> {
     core(api::atom_id(input))
+}
+
+/// The credential ID (`bafkrei…`) of a credential, proof included.
+#[napi]
+pub fn credential_id(credential: Value) -> Result<String> {
+    core(api::credential_id(&credential))
+}
+
+/// Converts an ID in any accepted form (`bafkrei…`, `Qm…`, `ipfs://…`) to `bafkrei…`.
+#[napi]
+pub fn normalize_id(id: String) -> Result<String> {
+    core(api::normalize_id(&id))
+}
+
+/// The DID document of a `did:key`, resolved offline (one `Multikey`).
+#[napi]
+pub fn did_document(did: String) -> Result<Value> {
+    core(api::did_document(&did))
 }
 
 /// The canonical JSON (RFC 8785) of an atom, exactly as hashed.
@@ -83,7 +101,7 @@ pub fn sign_atom(atom: Value, secret_key_multibase: String, created: String) -> 
     core(api::sign_atom(atom, &secret_key_multibase, &created))
 }
 
-/// Verifies a signed credential: `{valid, id?, issuer?, atom?, error?}`.
+/// Verifies a signed credential: `{valid, id?, credentialId?, issuer?, atom?, error?}`.
 #[napi]
 pub fn verify(credential: Value) -> Result<Value> {
     json(&api::verify(&credential))

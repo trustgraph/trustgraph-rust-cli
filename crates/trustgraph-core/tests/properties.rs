@@ -5,14 +5,15 @@
 use jiff::Timestamp;
 use proptest::prelude::*;
 use trustgraph_core::value::Decimal;
-use trustgraph_core::{Keypair, LensOptions, TrustAtom, TrustGraph, Value, credential};
+use trustgraph_core::{ContentId, Keypair, LensOptions, TrustAtom, TrustGraph, Value, credential};
 
 fn value() -> impl Strategy<Value = Value> {
     (-1_000_000_000i64..=1_000_000_000).prop_map(|n| Value::new(Decimal::new(n, 9)).unwrap())
 }
 
+/// Absolute URIs: a scheme, a colon, and anything without whitespace.
 fn identifier() -> impl Strategy<Value = String> {
-    "[a-zA-Z0-9:/._#?=-]{1,40}"
+    "[a-zA-Z][a-zA-Z0-9+.-]{0,8}:[a-zA-Z0-9:/._#?=-]{1,40}"
 }
 
 fn timestamp() -> impl Strategy<Value = Timestamp> {
@@ -23,16 +24,18 @@ fn atom() -> impl Strategy<Value = TrustAtom> {
     (
         identifier(),
         identifier(),
-        proptest::option::of("[^\\p{Cc}]{0,60}"),
+        proptest::option::of("[^\\p{Cc}]{1,60}"),
         proptest::option::of(value()),
         proptest::option::of(timestamp()),
+        proptest::option::of(any::<[u8; 32]>().prop_map(ContentId::from_digest)),
         proptest::collection::btree_map("[a-z]{1,8}", ".{0,20}", 0..3),
     )
         .prop_filter("source and target differ", |(s, t, ..)| s != t)
-        .prop_map(|(source, target, content, value, timestamp, extra)| TrustAtom {
+        .prop_map(|(source, target, content, value, timestamp, replaces, extra)| TrustAtom {
             content,
             value,
             timestamp,
+            replaces,
             extra,
             ..TrustAtom::new(source, target)
         })
@@ -42,6 +45,7 @@ proptest! {
     #[test]
     fn value_string_round_trips(v in value()) {
         prop_assert_eq!(v.to_string().parse::<Value>().unwrap(), v);
+        prop_assert_eq!(Value::parse_canonical(&v.to_string()).unwrap(), v);
         let json = serde_json::to_string(&v).unwrap();
         prop_assert_eq!(serde_json::from_str::<Value>(&json).unwrap(), v);
     }
@@ -49,6 +53,16 @@ proptest! {
     #[test]
     fn values_outside_range_are_rejected(n in prop_oneof![1_000_000_001i64..i64::MAX / 2, i64::MIN / 2..-1_000_000_000]) {
         prop_assert!(Value::new(Decimal::new(n, 9)).is_err());
+    }
+
+    #[test]
+    fn ids_round_trip_in_every_form(digest in any::<[u8; 32]>()) {
+        let id = ContentId::from_digest(digest);
+        let cid = id.to_string();
+        prop_assert!(cid.starts_with("bafkrei"));
+        prop_assert_eq!(cid.parse::<ContentId>().unwrap(), id);
+        prop_assert_eq!(id.to_legacy_string().parse::<ContentId>().unwrap(), id);
+        prop_assert_eq!(ContentId::from_iri(&id.to_iri()).unwrap(), id);
     }
 
     #[test]
@@ -76,7 +90,8 @@ proptest! {
         let atom = TrustAtom { source: key.did().to_string(), ..atom };
         prop_assume!(atom.source != atom.target);
         let signed = credential::sign_atom(&atom, &key, Timestamp::UNIX_EPOCH).unwrap();
-        prop_assert_eq!(credential::verify_atom(&signed).unwrap(), atom.clone());
+        let stamped = TrustAtom { timestamp: Some(atom.timestamp.unwrap_or(Timestamp::UNIX_EPOCH)), ..atom.clone() };
+        prop_assert_eq!(credential::verify_atom(&signed).unwrap(), stamped);
 
         // Changing the target to any other string must break the signature.
         let mut tampered = signed.clone();

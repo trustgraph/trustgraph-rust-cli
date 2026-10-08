@@ -15,7 +15,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
-use crate::{Error, Keypair, LensEntry, LensOptions, Result, TrustAtom, TrustGraph, credential};
+use crate::{
+    ContentId, Did, Error, Keypair, LensEntry, LensOptions, Result, Supersession, TrustAtom, TrustGraph, credential,
+};
 
 /// The core's version.
 #[must_use]
@@ -79,13 +81,48 @@ pub fn parse_atom(input: Json) -> Result<TrustAtom> {
     Ok(atom)
 }
 
-/// The content ID (`Qm…`) of an atom or credential's atom.
+/// The atom ID (`bafkrei…`) of an atom, or of the atom in a credential.
 ///
 /// # Errors
 ///
 /// See [`parse_atom`].
 pub fn atom_id(input: Json) -> Result<String> {
     Ok(parse_atom(input)?.id()?.to_string())
+}
+
+/// The credential ID (`bafkrei…`) of a credential: the CID of its canonical
+/// JSON, proof included. `replaces` links point to credential IDs.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidInput`] if `credential` is not a JSON object.
+pub fn credential_id(credential: &Json) -> Result<String> {
+    if !credential.is_object() {
+        return Err(Error::InvalidInput("a credential must be a JSON object".into()));
+    }
+    Ok(credential::credential_id(credential)?.to_string())
+}
+
+/// Converts an ID in any accepted form (`bafkrei…`, legacy `Qm…`, or
+/// `ipfs://…`) to the canonical `bafkrei…` form.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidId`] if `id` is not a content ID.
+pub fn normalize_id(id: &str) -> Result<String> {
+    Ok(ContentId::from_iri(id)?.to_string())
+}
+
+/// The DID document for a `did:key`, resolved offline: one Ed25519
+/// `Multikey` verification method. Serve it from a JSON-LD document loader
+/// to verify Trust Graph credentials with other VC libraries.
+///
+/// # Errors
+///
+/// Returns [`Error::InvalidKey`] if `did` is not an Ed25519 `did:key`
+/// (a `#fragment` repeating the key is accepted and ignored).
+pub fn did_document(did: &str) -> Result<Json> {
+    Ok(did.parse::<Did>()?.document())
 }
 
 /// The canonical JSON (RFC 8785) of an atom: exactly the bytes that are hashed.
@@ -128,9 +165,12 @@ pub fn sign_atom(atom: Json, secret_key_multibase: &str, created: &str) -> Resul
 pub struct Verification {
     /// Whether the credential verified.
     pub valid: bool,
-    /// The atom's content ID, if valid.
+    /// The atom ID, if valid.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
+    /// The credential ID, if valid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_id: Option<String>,
     /// The issuer's DID, if valid.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub issuer: Option<String>,
@@ -146,15 +186,25 @@ pub struct Verification {
 /// credential is reported in the result.
 #[must_use]
 pub fn verify(credential: &Json) -> Verification {
-    match credential::verify_atom(credential).and_then(|atom| Ok((atom.id()?, atom))) {
-        Ok((id, atom)) => Verification {
+    let checked = credential::verify_atom(credential)
+        .and_then(|atom| Ok((atom.id()?, credential::credential_id(credential)?, atom)));
+    match checked {
+        Ok((id, credential_id, atom)) => Verification {
             valid: true,
             id: Some(id.to_string()),
+            credential_id: Some(credential_id.to_string()),
             issuer: Some(atom.source.clone()),
             atom: Some(atom),
             error: None,
         },
-        Err(err) => Verification { valid: false, id: None, issuer: None, atom: None, error: Some(err.to_string()) },
+        Err(err) => Verification {
+            valid: false,
+            id: None,
+            credential_id: None,
+            issuer: None,
+            atom: None,
+            error: Some(err.to_string()),
+        },
     }
 }
 
@@ -200,23 +250,36 @@ impl LensRequest {
 
 /// Builds a graph from `items` (atoms and/or signed credentials).
 /// Credentials are verified; with `signed_only`, plain atoms are skipped.
+/// Credentials that their issuer has replaced (see [`Supersession`]) are
+/// left out.
 ///
 /// For speed in hot paths (such as reactive queries), verify credentials
 /// once when they are written, store the atoms, and pass plain atoms here.
 fn graph(items: Vec<Json>, signed_only: bool) -> Result<TrustGraph> {
-    let mut graph = TrustGraph::new();
+    // Each atom, with the credential it came from if it was signed.
+    let mut atoms = Vec::with_capacity(items.len());
     for (n, item) in items.into_iter().enumerate() {
         let item_error = |e: Error| Error::InvalidInput(format!("item {}: {e}", n + 1));
-        // Unlike `Record::from_json`, skip computing content IDs: scoring does not need them.
+        // Unlike `Record::from_json`, skip computing IDs: scoring does not need them.
         if item.get("proof").is_some() {
-            graph.insert(&credential::verify_atom(&item).map_err(item_error)?);
+            atoms.push((credential::verify_atom(&item).map_err(item_error)?, Some(item)));
         } else if item.get("@context").is_some() {
             return Err(item_error(Error::InvalidCredential("credential is not signed".into())));
         } else if !signed_only {
             let atom: TrustAtom = serde_json::from_value(item).map_err(|e| item_error(e.into()))?;
             atom.validate().map_err(item_error)?;
-            graph.insert(&atom);
+            atoms.push((atom, None));
         }
+    }
+    let supersession = Supersession::new(atoms.iter().filter(|(_, signed)| signed.is_some()).map(|(atom, _)| atom));
+    let mut graph = TrustGraph::new();
+    for (atom, signed) in &atoms {
+        if let Some(signed) = signed.as_ref().filter(|_| !supersession.is_empty()) {
+            if supersession.is_replaced(atom, credential::credential_id(signed)?) {
+                continue;
+            }
+        }
+        graph.insert(atom);
     }
     Ok(graph)
 }
@@ -300,21 +363,80 @@ mod tests {
 
     #[test]
     fn sign_rejects_bad_input() {
-        let atom = json!({ "source": alice().did, "target": "x" });
+        let atom = json!({ "source": alice().did, "target": "urn:x" });
         let key = alice().secret_key_multibase;
         assert!(sign_atom(atom.clone(), &key, "yesterday").is_err());
         assert!(sign_atom(atom.clone(), "zNotAKey", "2024-01-01T00:00:00Z").is_err());
         let signed = sign_atom(atom, &key, "2024-01-01T00:00:00Z").unwrap();
         assert!(sign_atom(signed, &key, "2024-01-01T00:00:00Z").is_err());
-        assert!(sign_atom(json!({ "source": "someone-else", "target": "x" }), &key, "2024-01-01T00:00:00Z").is_err());
+        assert!(
+            sign_atom(json!({ "source": "did:key:z6MkOther", "target": "urn:x" }), &key, "2024-01-01T00:00:00Z")
+                .is_err()
+        );
+        assert!(sign_atom(json!({ "source": alice().did, "target": "x" }), &key, "2024-01-01T00:00:00Z").is_err());
     }
 
     #[test]
     fn ids_and_canonical_json_agree_across_forms() {
-        let atom = json!({ "target": "b", "source": "a", "value": 1 });
-        assert_eq!(canonical_atom(atom.clone()).unwrap(), r#"{"source":"a","target":"b","value":"1"}"#);
+        let atom = json!({ "target": "urn:b", "source": "urn:a", "value": 1 });
+        assert_eq!(canonical_atom(atom.clone()).unwrap(), r#"{"source":"urn:a","target":"urn:b","value":"1"}"#);
         let credential = to_credential(atom.clone()).unwrap();
-        assert_eq!(atom_id(credential).unwrap(), atom_id(atom).unwrap());
+        let id = atom_id(atom).unwrap();
+        assert!(id.starts_with("bafkrei"), "{id}");
+        assert_eq!(atom_id(credential.clone()).unwrap(), id);
+        assert_ne!(credential_id(&credential).unwrap(), id, "the credential is a different document");
+        assert!(credential_id(&json!("not an object")).is_err());
+    }
+
+    #[test]
+    fn ids_normalize_from_every_form() {
+        let id = ContentId::of_bytes(b"x");
+        for form in [id.to_string(), id.to_legacy_string(), id.to_iri()] {
+            assert_eq!(normalize_id(&form).unwrap(), id.to_string());
+        }
+        assert!(normalize_id("https://example.com").is_err());
+    }
+
+    #[test]
+    fn verify_reports_both_ids() {
+        let credential = signed("https://sushi.example", "0.9");
+        let result = verify(&credential);
+        assert_eq!(result.id, Some(atom_id(credential.clone()).unwrap()));
+        assert_eq!(result.credential_id, Some(credential_id(&credential).unwrap()));
+        let json = serde_json::to_value(&result).unwrap();
+        assert!(json.get("credentialId").is_some(), "camelCase for JavaScript");
+    }
+
+    #[test]
+    fn did_documents_resolve_offline() {
+        let doc = did_document(&alice().did).unwrap();
+        assert_eq!(doc["id"], alice().did);
+        assert_eq!(doc["verificationMethod"][0]["type"], "Multikey");
+        assert_eq!(doc["verificationMethod"][0]["publicKeyMultibase"], alice().public_key_multibase);
+        assert_eq!(doc["assertionMethod"][0], format!("{}#{}", alice().did, alice().public_key_multibase));
+        let with_fragment = format!("{}#{}", alice().did, alice().public_key_multibase);
+        assert_eq!(did_document(&with_fragment).unwrap(), doc);
+        assert!(did_document("did:web:example.com").is_err());
+    }
+
+    #[test]
+    fn replaced_credentials_drop_out_of_the_lens() {
+        let typo = signed("https://sushi.exmaple", "0.9");
+        let mut fixed_atom = parse_atom(signed("https://sushi.example", "0.9")).unwrap();
+        fixed_atom.replaces = Some(credential_id(&typo).unwrap().parse().unwrap());
+        fixed_atom.timestamp = None;
+        let fixed = sign_atom(
+            serde_json::to_value(&fixed_atom).unwrap(),
+            &alice().secret_key_multibase,
+            "2024-02-01T00:00:00Z",
+        )
+        .unwrap();
+        let targets = |items: Vec<Json>| -> Vec<String> {
+            lens(items, &alice().did, &LensRequest::default()).unwrap().into_iter().map(|e| e.target).collect()
+        };
+        assert_eq!(targets(vec![typo.clone()]), ["https://sushi.exmaple"]);
+        assert_eq!(targets(vec![typo.clone(), fixed.clone()]), ["https://sushi.example"]);
+        assert_eq!(targets(vec![fixed, typo]), ["https://sushi.example"], "order does not matter");
     }
 
     #[test]
@@ -370,6 +492,6 @@ mod tests {
                 serde_json::to_string(&lens(items.clone(), &alice().did, &LensRequest::default()).unwrap()).unwrap();
             assert_eq!(again, first);
         }
-        assert_eq!(signed("x", "1"), signed("x", "1"), "Ed25519 signatures are deterministic");
+        assert_eq!(signed("urn:x", "1"), signed("urn:x", "1"), "Ed25519 signatures are deterministic");
     }
 }

@@ -13,12 +13,21 @@ const credential: TG.Credential = tg.signAtom(
 );
 const check: TG.Verification = tg.verify(credential);
 const atom: TG.TrustAtom | undefined = check.atom;
-const view: TG.LensEntry[] = tg.lens([credential, { source: "a", target: "b", value: "1" }], me.did, { topic: "sushi" });
+const view: TG.LensEntry[] = tg.lens([credential, { source: "urn:a", target: "urn:b", value: "1" }], me.did, { topic: "sushi" });
 const best: number = view[0]?.score ?? 0;
 const rollups: TG.TrustAtom[] = tg.rollup([credential], me.did, null, new Date().toISOString());
 const id: string = tg.atomId(rollups[0]!);
+const credentialId: string = tg.credentialId(credential);
+const replacing: TG.Credential = tg.signAtom(
+  { source: me.did, target: "https://sushi.example", value: "1", replaces: `ipfs://${credentialId}` },
+  me.secretKeyMultibase,
+  new Date().toISOString(),
+);
+const doc: TG.DidDocument = tg.didDocument(me.did);
+const method: "Multikey" = doc.verificationMethod[0]!.type;
+const normalized: string = tg.normalizeId(id);
 
 // @ts-expect-error depth must be a number
 tg.lens([], me.did, { depth: "3" });
 
-export { atom, best, id, fromSeed };
+export { atom, best, id, fromSeed, replacing, method, normalized };

@@ -18,6 +18,10 @@ pub enum Error {
     #[error("invalid trust atom: {0}")]
     InvalidAtom(String),
 
+    /// A content ID (`bafkrei…` or legacy `Qm…`) could not be decoded.
+    #[error("invalid content ID: {0}")]
+    InvalidId(String),
+
     /// A `did:key` (or multibase key) could not be decoded.
     #[error("invalid key: {0}")]
     InvalidKey(String),

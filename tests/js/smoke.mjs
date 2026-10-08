@@ -38,7 +38,11 @@ const items = [
 for (const credential of items) {
   const result = tg.verify(credential);
   assert.equal(result.valid, true);
+  assert.match(result.id, /^bafkrei[a-z2-7]{52}$/);
   assert.equal(result.id, tg.atomId(credential));
+  assert.equal(result.credentialId, tg.credentialId(credential));
+  assert.notEqual(result.credentialId, result.id);
+  assert.equal(credential.validFrom, now.replace(/\.\d+Z$/, "Z"), "signing stamps the atom");
 }
 const forged = structuredClone(items[1]);
 forged.credentialSubject.value = "-1";
@@ -55,8 +59,29 @@ const rollups = tg.rollup(items, alice.did, { topic: "sushi" }, now);
 assert.equal(rollups.length, 2);
 assert.equal(tg.verify(tg.signAtom(rollups[0], alice.secretKeyMultibase, now)).valid, true);
 
-assert.equal(tg.canonicalAtom({ target: "b", source: "a" }), '{"source":"a","target":"b"}');
-assert.equal(tg.toCredential({ source: "a", target: "b" }).type[1], "TrustAtomCredential");
-assert.throws(() => tg.parseAtom({ source: "a" }), /target/);
+// Supersession: the replacing credential withdraws the replaced one from the lens.
+const moved = tg.signAtom(
+  { source: bob.did, target: "https://sushi2.example", content: "sushi", value: "0.8", replaces: `ipfs://${tg.credentialId(items[1])}` },
+  bob.secretKeyMultibase,
+  now,
+);
+assert.deepEqual(tg.lens([items[0], items[1], moved], alice.did, { topic: "sushi" }).map((e) => e.target), [bob.did, "https://sushi2.example"]);
+
+// IDs: legacy `Qm…` and `ipfs://` forms normalize to `bafkrei…`.
+const hello = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44yegnrjhc4yeq";
+assert.equal(tg.normalizeId("QmRN6wdp1S2A5EtjW9A3M1vKSBuQQGcgvuhoMUoEz4iiT5"), hello);
+assert.equal(tg.normalizeId(`ipfs://${hello}`), hello);
+assert.throws(() => tg.normalizeId("nope"), /content ID/);
+
+// did:key documents resolve offline, as Controlled Identifiers 1.0 Multikeys.
+const doc = tg.didDocument(alice.did);
+assert.equal(doc.verificationMethod[0].type, "Multikey");
+assert.equal(doc.assertionMethod[0], `${alice.did}#${alice.publicKeyMultibase}`);
+assert.throws(() => tg.didDocument("did:web:example.com"), /did:key/);
+
+assert.equal(tg.canonicalAtom({ target: "urn:b", source: "urn:a" }), '{"source":"urn:a","target":"urn:b"}');
+assert.equal(tg.toCredential({ source: "urn:a", target: "urn:b" }).type[1], "TrustAtomCredential");
+assert.throws(() => tg.parseAtom({ source: "urn:a" }), /target/);
+assert.throws(() => tg.parseAtom({ source: "alice", target: "urn:b" }), /absolute URI/);
 
 console.log(`smoke test passed: ${process.argv[2]}`);

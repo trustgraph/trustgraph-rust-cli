@@ -1,0 +1,32 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/credentials/v2",
+    "https://trustgraph.net/ns/v1"
+  ],
+  "type": [
+    "VerifiableCredential",
+    "TrustAtomCredential"
+  ],
+  "issuer": "did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2",
+  "validFrom": "2026-10-08T12:00:00Z",
+  "credentialSubject": {
+    "id": "alice",
+    "content": "rust code review",
+    "value": "0.8",
+    "extra": {
+      "via": "meetup"
+    }
+  },
+  "proof": {
+    "type": "DataIntegrityProof",
+    "cryptosuite": "eddsa-jcs-2022",
+    "created": "2026-10-08T12:00:01Z",
+    "verificationMethod": "did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2#z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2",
+    "proofPurpose": "assertionMethod",
+    "@context": [
+      "https://www.w3.org/ns/credentials/v2",
+      "https://trustgraph.net/ns/v1"
+    ],
+    "proofValue": "z43fgGhWnyMuFzfLVRxHuSRstkMFSknart632z6qnC9P76EksdUPEbdrWRXbwo7Yxkj654Zu6VRPFpFgepJxMzbcJ"
+  }
+}

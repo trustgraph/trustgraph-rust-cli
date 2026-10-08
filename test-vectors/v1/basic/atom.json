@@ -1,0 +1,10 @@
+{
+  "source": "did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2",
+  "target": "did:web:alice.example",
+  "content": "rust code review",
+  "value": "0.8",
+  "timestamp": "2026-10-08T12:00:00Z",
+  "extra": {
+    "via": "meetup"
+  }
+}

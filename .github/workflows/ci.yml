@@ -80,6 +80,8 @@ jobs:
       - run: scripts/build-wasm-package.sh
       - run: node tests/js/smoke.mjs target/npm/trustgraph-wasm/node/trustgraph_wasm.cjs
       - run: node tests/js/smoke.mjs target/npm/trustgraph-wasm/web/trustgraph_wasm.js
+      - name: Interop with @digitalbazaar/vc (eddsa-jcs-2022, JSON-LD safe mode, JSON Schema)
+        run: node tests/js/interop.mjs target/npm/trustgraph-wasm/node/trustgraph_wasm.cjs
       - name: TypeScript types
         run: pnpm run typecheck
       - name: Benchmark (informational)
@@ -104,6 +106,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build:node
       - run: pnpm run test:node
+      - name: Interop with @digitalbazaar/vc
+        run: node tests/js/interop.mjs crates/trustgraph-node/index.js
       - name: Oldest supported Node (22)
         if: runner.os == 'Linux'
         run: npx -y node@22 tests/js/smoke.mjs crates/trustgraph-node/index.js

@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
+use serde_json::{Value as Json, json};
 
 use crate::{Error, Result};
 
@@ -13,6 +14,10 @@ const ED25519_PUB: [u8; 2] = [0xed, 0x01];
 /// Multicodec prefix for an Ed25519 private key (`0x1300`, varint-encoded).
 const ED25519_PRIV: [u8; 2] = [0x80, 0x26];
 const DID_KEY_PREFIX: &str = "did:key:";
+/// The DID 1.0 context.
+pub const DID_CONTEXT: &str = "https://www.w3.org/ns/did/v1";
+/// The `Multikey` context.
+pub const MULTIKEY_CONTEXT: &str = "https://w3id.org/security/multikey/v1";
 
 /// An Ed25519 key pair: an agent's identity.
 ///
@@ -154,6 +159,42 @@ impl Did {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    /// The verification method: a [Controlled Identifiers 1.0](https://www.w3.org/TR/cid-1.0/#Multikey)
+    /// `Multikey` with `publicKeyMultibase`, as a standalone JSON-LD document.
+    #[must_use]
+    pub fn verification_method_document(&self) -> Json {
+        json!({
+            "@context": MULTIKEY_CONTEXT,
+            "id": self.verification_method(),
+            "type": "Multikey",
+            "controller": self.0,
+            "publicKeyMultibase": self.multibase(),
+        })
+    }
+
+    /// The DID document, resolved offline as the [`did:key`](https://w3c-ccg.github.io/did-key-spec/)
+    /// method defines it: one Ed25519 `Multikey` verification method, usable
+    /// for authentication, assertions (signing credentials) and capabilities.
+    /// JSON-LD verifiers can serve it from their document loader, so they
+    /// never need a network to check a Trust Graph signature.
+    #[must_use]
+    pub fn document(&self) -> Json {
+        let id = self.verification_method();
+        let mut method = self.verification_method_document();
+        if let Some(object) = method.as_object_mut() {
+            object.remove("@context");
+        }
+        json!({
+            "@context": [DID_CONTEXT, MULTIKEY_CONTEXT],
+            "id": self.0,
+            "verificationMethod": [method],
+            "authentication": [id],
+            "assertionMethod": [id],
+            "capabilityInvocation": [id],
+            "capabilityDelegation": [id],
+        })
+    }
 }
 
 impl fmt::Display for Did {
@@ -250,6 +291,30 @@ mod tests {
         assert_eq!(did.public_key().to_multibase(), SPEC_PUBLIC);
         assert_eq!(did.verification_method(), format!("did:key:{SPEC_PUBLIC}#{SPEC_PUBLIC}"));
         assert_eq!(did.verification_method().parse::<Did>().unwrap(), did);
+    }
+
+    #[test]
+    fn did_documents_use_multikey() {
+        let did: Did = format!("did:key:{SPEC_PUBLIC}").parse().unwrap();
+        let vm = format!("did:key:{SPEC_PUBLIC}#{SPEC_PUBLIC}");
+        assert_eq!(
+            did.document(),
+            json!({
+                "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/multikey/v1"],
+                "id": format!("did:key:{SPEC_PUBLIC}"),
+                "verificationMethod": [{
+                    "id": vm,
+                    "type": "Multikey",
+                    "controller": format!("did:key:{SPEC_PUBLIC}"),
+                    "publicKeyMultibase": SPEC_PUBLIC
+                }],
+                "authentication": [vm],
+                "assertionMethod": [vm],
+                "capabilityInvocation": [vm],
+                "capabilityDelegation": [vm]
+            })
+        );
+        assert_eq!(did.verification_method_document()["@context"], MULTIKEY_CONTEXT);
     }
 
     #[test]

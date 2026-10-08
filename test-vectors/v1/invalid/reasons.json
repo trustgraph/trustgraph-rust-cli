@@ -1,0 +1,14 @@
+{
+  "context-order": "@context must be exactly [credentials/v2, trustgraph/v1]",
+  "credential-id": "credentials have no id: they are named by their CID",
+  "extra-not-strings": "extra values must be strings in v1",
+  "extra-type": "type must be exactly [VerifiableCredential, TrustAtomCredential]",
+  "missing-valid-from": "signed credentials need validFrom",
+  "replaces-not-iri": "replaces must be ipfs://bafkrei…",
+  "subject-not-uri": "credentialSubject.id must be an absolute URI",
+  "tampered": "the value was changed after signing",
+  "undefined-term": "every term must be defined by the contexts",
+  "value-not-canonical": "value must be canonical (0.8, not 0.80)",
+  "value-number": "value must be a string",
+  "value-out-of-range": "value must be in -1..=1"
+}

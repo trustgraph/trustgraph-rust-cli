@@ -151,7 +151,8 @@ fn main() -> Result<(), trustgraph_core::Error> {
     let alice = Keypair::from_seed(&[7; 32]); // or Keypair::generate() with the `random` feature
     let atom = TrustAtom::new(alice.did().to_string(), "https://sushi.example")
         .with_content("sushi")
-        .with_value("0.9".parse()?);
+        .with_value("0.9".parse()?)
+        .with_timestamp("2026-01-01T00:00:00Z".parse().unwrap());
     let signed = credential::sign_atom(&atom, &alice, "2026-01-01T00:00:00Z".parse().unwrap())?;
     assert_eq!(credential::verify_atom(&signed)?, atom);
 

@@ -97,15 +97,15 @@ mod tests {
         let path = dir.path().join("nested/atoms.ndjson");
         let mut store = Store::open(&path).unwrap();
         assert_eq!(store.len(), 0);
-        assert!(store.add(record("a", "b")).unwrap());
-        assert!(!store.add(record("a", "b")).unwrap());
-        assert!(store.add(record("a", "c")).unwrap());
+        assert!(store.add(record("urn:a", "urn:b")).unwrap());
+        assert!(!store.add(record("urn:a", "urn:b")).unwrap());
+        assert!(store.add(record("urn:a", "urn:c")).unwrap());
 
         let reopened = Store::open(&path).unwrap();
         assert_eq!(reopened.len(), 2);
         assert_eq!(reopened.records, store.records);
         assert_eq!(fs::read_to_string(&path).unwrap().lines().count(), 2);
-        assert_eq!(reopened.query(&Query { target: Some("c".into()), ..Query::default() }).count(), 1);
+        assert_eq!(reopened.query(&Query { target: Some("urn:c".into()), ..Query::default() }).count(), 1);
     }
 
     #[test]

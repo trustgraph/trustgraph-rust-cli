@@ -13,6 +13,13 @@
     "typecheck": "tsc --noEmit --strict --lib es2022,dom tests/js/types.ts"
   },
   "devDependencies": {
+    "@digitalbazaar/credentials-context": "^3.2.0",
+    "@digitalbazaar/data-integrity": "^2.5.0",
+    "@digitalbazaar/ed25519-multikey": "^1.3.1",
+    "@digitalbazaar/eddsa-jcs-2022-cryptosuite": "^1.0.0",
+    "@digitalbazaar/vc": "^7.3.0",
+    "ajv": "^8.20.0",
+    "jsonld": "^9.0.0",
     "typescript": "^7.0.2"
   }
 }

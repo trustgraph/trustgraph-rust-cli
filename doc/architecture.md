@@ -77,11 +77,14 @@ between them:
 | `generateKeypair()` | New identity (`did:key`) from a secure random source; the only non-deterministic function |
 | `keypairFromSeed(seed)` | Identity (`did:key`) from a 32-byte seed you supply |
 | `parseAtom(item)` | Validate an atom, or extract it from a credential |
-| `atomId(item)` | Content ID (`Qm…`) |
+| `atomId(item)` | Atom ID (CIDv1, `bafkrei…`) |
+| `credentialId(credential)` | Credential ID: the CID of the exact signed credential |
+| `normalizeId(id)` | Any accepted ID form (`bafkrei…`, legacy `Qm…`, `ipfs://…`) to `bafkrei…` |
+| `didDocument(did)` | A `did:key` DID document (one `Multikey`), resolved offline |
 | `canonicalAtom(item)` | Canonical JSON (RFC 8785), exactly as hashed |
 | `toCredential(atom)` | Unsigned W3C Verifiable Credential |
 | `signAtom(atom, secret, created)` | Signed credential (`eddsa-jcs-2022`) |
-| `verify(credential)` | `{valid, id, issuer, atom}` or `{valid: false, error}` |
+| `verify(credential)` | `{valid, id, credentialId, issuer, atom}` or `{valid: false, error}` |
 | `lens(items, root, options)` | The Agent Lens / Trust Cascade |
 | `rollup(items, root, options, at)` | Lens results as atoms, ready to sign and share |
 
@@ -96,7 +99,7 @@ the packages are proven to behave identically.
 | Need | Use | Why |
 |---|---|---|
 | Trust scores inside live, reactive queries (e.g. a Convex query, so the UI updates on its own) | **WebAssembly** | Native addons can't run in Convex's default runtime; WebAssembly can, and is deterministic |
-| Browsers, Cloudflare Workers, Deno | **WebAssembly** | Runs anywhere WebAssembly runs; 540 KiB (226 KiB gzipped) |
+| Browsers, Cloudflare Workers, Deno | **WebAssembly** | Runs anywhere WebAssembly runs; 560 KiB (231 KiB gzipped) |
 | Heavy batch work: full-graph recomputes, crawling, mass verification | **Native** in a Node process or Convex Node action, or the **CLI** outside Convex writing results back over HTTP | Faster than WebAssembly (up to 3–4× on verification); more memory headroom |
 | People, scripts and other projects | **CLI** | No JavaScript or Convex involved |
 
@@ -127,7 +130,7 @@ filter, averaged over two runs. CI prints the same benchmark on every run:
 | `lens`, 10,000 atoms | 51 ms | 35 ms |
 | `lens`, 100,000 atoms | 0.54 s | 0.43 s |
 | `verify`, one credential | 0.26 ms | 0.07 ms |
-| Package size | 540 KiB wasm (226 KiB gzipped) | 1.2 MB (Linux x64) |
+| Package size | 560 KiB wasm (231 KiB gzipped) | 1.2 MB (Linux x64) |
 
 Against Convex's limits for queries and mutations (1 s, 64 MiB, 32 MiB
 bundle): graphs up to tens of thousands of atoms fit comfortably. Beyond about

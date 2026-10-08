@@ -166,7 +166,24 @@ const resigned = await vc.issue({
 });
 assert.deepEqual(resigned, golden);
 
-// --- 4. JSON Schemas (draft 2020-12) ---------------------------------------
+// --- 4. The vocabulary documents every term the context defines ------------
+
+const contextTerms = Object.entries(contexts.get(TRUSTGRAPH_V1)["@context"])
+  .filter(([term]) => !term.startsWith("@"))
+  .map(([, def]) => (typeof def === "string" ? def : def["@id"]))
+  .sort();
+const vocab = await jsonld.flatten(readJson("schema", "v1", "vocab.jsonld"), null, { documentLoader, safe: true });
+const defined = vocab
+  .map((node) => node["@id"])
+  .filter((id) => id.startsWith("https://trustgraph.net/ns#") && id !== "https://trustgraph.net/ns#")
+  .sort();
+assert.deepEqual(defined, contextTerms, "vocab.jsonld defines exactly the context's terms");
+const html = readFileSync(join(repo, "schema", "v1", "index.html"), "utf8");
+for (const iri of contextTerms) {
+  assert.ok(html.includes(`id="${iri.split("#")[1]}"`), `index.html has an anchor for ${iri}`);
+}
+
+// --- 5. JSON Schemas (draft 2020-12) ---------------------------------------
 
 const ajv = new Ajv2020({ strict: true, allErrors: true });
 ajv.addSchema(readJson("schema", "v1", "trust-atom.schema.json"), "trust-atom.schema.json");

@@ -30,7 +30,7 @@
 //! There is no credential `id`: a credential is named by its
 //! [`credential_id`], the CID of its canonical JSON.
 
-use jiff::{Timestamp, Unit};
+use jiff::{RoundMode, Timestamp, TimestampRound, Unit};
 use serde_json::{Map, Value as Json, json};
 use sha2::{Digest, Sha256};
 
@@ -361,7 +361,8 @@ fn hash_data(proof_config: &Map<String, Json>, document: &Map<String, Json>) -> 
 }
 
 fn whole_seconds(t: Timestamp) -> Result<Timestamp> {
-    t.round(Unit::Second).map_err(|e| Error::InvalidCredential(e.to_string()))
+    t.round(TimestampRound::new().smallest(Unit::Second).mode(RoundMode::Trunc))
+        .map_err(|e| Error::InvalidCredential(e.to_string()))
 }
 
 fn bad(msg: &str) -> Error {
@@ -521,9 +522,9 @@ mod tests {
     fn signing_stamps_atoms_without_a_timestamp() {
         let atom = TrustAtom::new(alice().did().to_string(), "https://example.com");
         let signed = sign_atom(&atom, &alice(), "2024-05-01T12:00:01.75Z".parse().unwrap()).unwrap();
-        assert_eq!(signed["validFrom"], "2024-05-01T12:00:02Z");
-        assert_eq!(signed["proof"]["created"], "2024-05-01T12:00:02Z");
-        assert_eq!(verify_atom(&signed).unwrap().timestamp, Some("2024-05-01T12:00:02Z".parse().unwrap()));
+        assert_eq!(signed["validFrom"], "2024-05-01T12:00:01Z");
+        assert_eq!(signed["proof"]["created"], "2024-05-01T12:00:01Z");
+        assert_eq!(verify_atom(&signed).unwrap().timestamp, Some("2024-05-01T12:00:01Z".parse().unwrap()));
     }
 
     #[test]

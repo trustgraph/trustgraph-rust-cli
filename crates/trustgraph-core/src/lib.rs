@@ -7,7 +7,9 @@
 //!   regarding *content*, to the degree *value* (`-1..=1`).
 //! - [`Keypair`] / [`Did`]: Ed25519 identities as `did:key` DIDs.
 //! - [`credential`]: signed atoms as W3C Verifiable Credentials 2.0, using
-//!   the `eddsa-jcs-2022` cryptosuite.
+//!   the `eddsa-jcs-2022` cryptosuite, in the strict v1 profile.
+//! - [`ContentId`]: atom and credential IDs, CIDv1 (`bafkrei…`).
+//! - [`context`]: the bundled Trust Graph v1 JSON-LD context.
 //! - [`TrustGraph`]: the **Agent Lens**, everything one agent can see
 //!   through the **Trust Cascade** of the agents they trust.
 //! - [`Record`] / [`Query`]: verified atoms and filters over them.

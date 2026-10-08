@@ -95,8 +95,8 @@ Everything below this line is supporting detail.
 | W3C VC 2.0 + `eddsa-jcs-2022` sign/verify (passes the spec's test vectors) | ✅ |
 | Local append-only store, verified on the way in | ✅ |
 | Agent Lens / Trust Cascade, topic filters, rollups | ✅ |
-| Lens `--min-value` / `--max-value`, `--explain` (per-hop falloff), `--format table\|dot\|mermaid`; `renderLens` in JS (PR_LINK) | ✅ |
-| Interactive `trust rate` (dialoguer), named contacts (`trust contact`, `@name`), `--format table` for `query` (PR_LINK) | ✅ |
+| Lens `--min-value` / `--max-value`, `--explain` (per-hop falloff), `--format table\|dot\|mermaid`; `renderLens` in JS ([PR #22](https://github.com/trustgraph/trustgraph-rust-cli/pull/22)) | ✅ |
+| Interactive `trust rate` (dialoguer), named contacts (`trust contact`, `@name`), `--format table` for `query` ([PR #22](https://github.com/trustgraph/trustgraph-rust-cli/pull/22)) | ✅ |
 | CI (3 OSes, MSRV, clippy pedantic, rustdoc), Dependabot, Apache-2.0 ([PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11)) | ✅ |
 | Pure `trustgraph-core` (no I/O, enforced in CI) + shared JSON `api` ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 | Monorepo: Cargo workspace (`crates/*`), pnpm workspace (`packages/*`), Rust-first language policy ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |

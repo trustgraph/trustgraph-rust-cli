@@ -1,3 +1,12 @@
+> **Historical document.** This is the original Trust Graph protocol README
+> (2015–2024), imported with its history from
+> [`trustgraph/trustgraph`](https://github.com/trustgraph/trustgraph). It
+> describes earlier formats (values in `0..1`, the 2017 `TrustClaim` JSON-LD
+> shape) and tools that no longer exist. For the current atom and credential
+> formats, see the [main README](../../README.md) and
+> [architecture](../architecture.md). The 2017 JSON-LD context is in
+> [`schema/legacy-2017/`](../../schema/legacy-2017).
+
 # ŦRUSŦ GRΔPH
 
 Trust Graph is:
@@ -8,7 +17,7 @@ Trust Graph is:
 - Compatible with existing rating schemes (scores, percentages, star ratings, etc)
 - Open Source (Apache 2 licensed)
 
-![Trust Network Example](https://cdn.rawgit.com/trustgraph/trustgraph/fee63549abcaa480ee18da207ebab7c45321de84/doc/images/network.png)
+![Trust Network Example](images/network.png)
 
 Trust Graph is a very young codebase, so expect limited functionality, and don't use it in production just yet.
 
@@ -137,8 +146,8 @@ Would create the following signed JSON, in the [JSON-LD Verifiable Claim](https:
     "type": "Ed25519Signature2018",
     "verificationMethod": {
       "@context": "https://w3id.org/security/v1",
-      "id": "did:holo:b2B37C890824242Cb9B0FE5614fA2221B79901E",
-      "type": "Holochain",
+      "id": "did:key:z6Mko2C7FvL9nNN6Ut1yPcUuEjbJoziDjDmjAJixemPkQBss#z6Mko2C7FvL9nNN6Ut1yPcUuEjbJoziDjDmjAJixemPkQBss",
+      "type": "Ed25519VerificationKey2018",
     },
     "created": "2021-11-05T03:12:54Z",
     "proofPurpose": "assertionMethod",

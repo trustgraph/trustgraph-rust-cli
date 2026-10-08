@@ -209,10 +209,10 @@ tg.lens([credential /* , …everyone else's atoms */], me.did, { topic: "sushi" 
 | [`crates/trustgraph-node`](crates/trustgraph-node) | Rust → npm | `@trustgraph/trustgraph` (napi-rs) |
 | [`bindings/`](bindings) | TypeScript | Types shared by both npm packages |
 | [`tests/js/`](tests/js) | JavaScript | One smoke test run against every JavaScript build, an interop test against Digital Bazaar's VC libraries, and a benchmark |
-| [`schema/`](schema) | JSON-LD, JSON Schema | The published v1 context, vocabulary and schemas |
+| [`schema/`](schema) | JSON-LD, JSON Schema | The published [v1](schema/v1) context, vocabulary and schemas; [`legacy-2017/`](schema/legacy-2017), the 2017 `TrustClaim` context (historical) |
 | [`test-vectors/`](test-vectors) | JSON | Golden atoms, credentials and IDs |
 | [`scripts/`](scripts) | Shell | Core purity check, WebAssembly packaging |
-| [`doc/`](doc) | | [Protocol](doc/protocol.md), [architecture](doc/architecture.md), [roadmap](doc/plan/README.md) and [research](doc/research) |
+| [`doc/`](doc) | | [Protocol](doc/protocol.md), [architecture](doc/architecture.md), [roadmap](doc/plan/README.md), [research](doc/research), and the [original protocol text](doc/protocol/README.md) (historical) |
 
 New projects go in this repo:
 

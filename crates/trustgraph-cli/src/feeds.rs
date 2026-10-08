@@ -311,7 +311,7 @@ mod tests {
     fn following_round_trips() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("following.json");
-        assert!(Following::load(&path).unwrap().feeds.is_empty());
+        assert_eq!(Following::load(&path).unwrap().feeds.len(), 0);
         let mut following = Following::default();
         following.feeds.push(Followed { feed: "https://a.example/index.json".into(), ..Followed::default() });
         following.save(&path).unwrap();

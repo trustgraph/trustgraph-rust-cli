@@ -246,7 +246,7 @@ mod tests {
     fn empty_feed_is_valid() {
         let feed = build(&[], &alice(), at()).unwrap();
         assert_eq!(feed.atoms, "");
-        assert!(verify(&feed.index, &feed.atoms).unwrap().records.is_empty());
+        assert_eq!(verify(&feed.index, &feed.atoms).unwrap().records.len(), 0);
     }
 
     #[test]

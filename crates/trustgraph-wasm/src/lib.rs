@@ -6,6 +6,8 @@
 //! Cloudflare Workers, Deno, Node, and inside Convex queries and mutations
 //! (where native addons cannot).
 
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value as Json;
@@ -123,7 +125,7 @@ pub fn verify(credential: JsValue) -> JsResult<JsValue> {
 
 /// The Agent Lens: everything `root` can see in `items` (atoms and/or
 /// signed credentials), best first. `options` is optional:
-/// `{depth?, decay?, topic?, signedOnly?, limit?}`.
+/// `{depth?, decay?, topic?, signedOnly?, limit?, minValue?, maxValue?, explain?}`.
 ///
 /// # Errors
 ///
@@ -141,4 +143,17 @@ pub fn lens(items: JsValue, root: &str, options: JsValue) -> JsResult<JsValue> {
 #[wasm_bindgen]
 pub fn rollup(items: JsValue, root: &str, options: JsValue, at: &str) -> JsResult<JsValue> {
     to_js(&core(api::rollup(from_js(items, "items")?, root, &request(options)?, at))?)
+}
+
+/// Draws `root`'s lens as a graph: `format` is `"dot"` (Graphviz) or
+/// `"mermaid"`. `options` is as for [`lens`]; `labels` optionally maps
+/// identifiers to display names (`{[did]: "bob"}`).
+///
+/// # Errors
+///
+/// Throws like [`lens`], or if `format` is unknown.
+#[wasm_bindgen(js_name = renderLens)]
+pub fn render_lens(items: JsValue, root: &str, format: &str, options: JsValue, labels: JsValue) -> JsResult<String> {
+    let labels = from_js::<Option<BTreeMap<String, String>>>(labels, "labels")?.unwrap_or_default();
+    core(api::render_lens(from_js(items, "items")?, root, format, &request(options)?, labels))
 }

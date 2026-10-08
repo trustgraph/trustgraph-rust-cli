@@ -51,6 +51,30 @@ assert.equal(view[1].confidence, 0.5);
 assert.deepEqual(tg.lens(items, alice.did), tg.lens(items, alice.did, null));
 assert.throws(() => tg.lens(items, alice.did, { decay: 2 }), /decay/);
 
+assert.deepEqual(tg.lens(items, alice.did, { minValue: 0.9 }).map((e) => e.target), [bob.did]);
+assert.deepEqual(tg.lens(items, alice.did, { maxValue: 0.9 }).map((e) => e.target), ["https://sushi.example"]);
+assert.throws(() => tg.lens(items, alice.did, { minValue: 1, maxValue: 0 }), /minValue/);
+assert.equal(view[1].via, undefined);
+const explained = tg.lens(items, alice.did, { topic: "sushi", explain: true });
+assert.deepEqual(explained[1].via, [
+  {
+    rater: bob.did,
+    value: 0.8,
+    weight: 0.5,
+    path: [
+      { from: alice.did, to: bob.did, value: 1, weight: 1 },
+      { from: bob.did, to: "https://sushi.example", value: 0.8, weight: 0.5 },
+    ],
+  },
+]);
+
+const dot = tg.renderLens(items, alice.did, "dot", { topic: "sushi" }, { [bob.did]: "bob" });
+assert.match(dot, /^digraph lens \{/);
+assert.match(dot, /\[label="sushi: 0\.8"\]/);
+assert.match(dot, /label="bob\\nscore 1"/);
+assert.match(tg.renderLens(items, alice.did, "mermaid"), /flowchart LR/);
+assert.throws(() => tg.renderLens(items, alice.did, "svg"), /format/);
+
 const rollups = tg.rollup(items, alice.did, { topic: "sushi" }, now);
 assert.equal(rollups.length, 2);
 assert.equal(tg.verify(tg.signAtom(rollups[0], alice.secretKeyMultibase, now)).valid, true);

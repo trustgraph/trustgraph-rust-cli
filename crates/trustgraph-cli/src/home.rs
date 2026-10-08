@@ -1,4 +1,4 @@
-//! The `trust` home directory: keys and the local store.
+//! The `trust` home directory: keys, contacts and the local store.
 
 use std::fs;
 use std::io::Write;
@@ -8,6 +8,7 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use trustgraph_core::{Did, Keypair};
 
+use crate::contacts::Contacts;
 use crate::store::Store;
 
 /// Paths under the home directory.
@@ -53,6 +54,14 @@ impl Home {
 
     pub fn open_store(&self) -> Result<Store> {
         Store::open(self.store_path())
+    }
+
+    pub fn contacts_path(&self) -> PathBuf {
+        self.dir.join("contacts.json")
+    }
+
+    pub fn contacts(&self) -> Result<Contacts> {
+        Contacts::load(self.contacts_path())
     }
 
     fn key_path(&self, name: &str) -> PathBuf {

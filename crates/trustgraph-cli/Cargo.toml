@@ -23,6 +23,7 @@ trustgraph-core = { workspace = true, features = ["random"] }
 anyhow.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
+dialoguer.workspace = true
 directories.workspace = true
 jiff = { workspace = true, features = ["std"] }
 serde.workspace = true

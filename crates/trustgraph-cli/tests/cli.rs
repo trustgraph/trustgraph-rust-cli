@@ -259,3 +259,210 @@ fn pretty_output() {
     let out = env.run(&["--pretty", "atom", "-s", "a", "-t", "b", "--no-timestamp"], "");
     assert_eq!(out, "{\n  \"source\": \"a\",\n  \"target\": \"b\"\n}\n");
 }
+
+/// alice (default key) trusts bob about sushi; bob rates two sushi places.
+fn sushi_world(env: &Env) -> (String, String) {
+    let alice = env.new_key("default");
+    let bob = env.new_key("bob");
+    for (key, target, value) in
+        [("default", bob.as_str(), "1"), ("bob", "https://sushi.example", "0.8"), ("bob", "https://bad.example", "-1")]
+    {
+        env.run(&["rate", "--key", key, "-t", target, "-c", "sushi", "-v", value], "");
+    }
+    (alice, bob)
+}
+
+#[test]
+fn contacts_stand_in_for_dids() {
+    let env = Env::new();
+    let (_, bob) = sushi_world(&env);
+    assert_eq!(env.run(&["contact", "list"], ""), "");
+    assert_eq!(env.json_lines(&["contact", "add", "bob", &bob], "")[0], json!({ "name": "bob", "did": bob }));
+    env.cmd()
+        .args(["contact", "add", "bob", "did:key:z6MkOther"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--force"));
+    env.cmd().args(["contact", "add", "bad/name", &bob]).assert().code(2);
+    env.run(&["contact", "add", "carol", "did:key:z6MkCarol"], "");
+    let listed = env.json_lines(&["contact", "list"], "");
+    assert_eq!(listed.iter().map(|c| c["name"].as_str().unwrap()).collect::<Vec<_>>(), ["bob", "carol"]);
+    let table = env.run(&["contact", "list", "--format", "table"], "");
+    assert_eq!(table.lines().next().unwrap().split_whitespace().collect::<Vec<_>>(), ["NAME", "DID"]);
+    assert!(table.contains(&format!("@bob    {bob}")), "{table}");
+
+    // @name and bare names resolve; DIDs, URLs and unknown names pass through.
+    for target in ["@bob", "bob"] {
+        assert_eq!(env.json_lines(&["atom", "-t", target, "--no-timestamp"], "")[0]["target"], bob.as_str());
+    }
+    assert_eq!(env.json_lines(&["atom", "-t", "dave", "--no-timestamp"], "")[0]["target"], "dave");
+    let atom = &env.json_lines(&["atom", "-s", "@carol", "-t", "https://x.example", "--no-timestamp"], "")[0];
+    assert_eq!(atom["source"], "did:key:z6MkCarol");
+    assert_eq!(atom["target"], "https://x.example");
+    env.cmd()
+        .args(["atom", "-t", "@dave"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no contact named `dave`").and(predicate::str::contains("trust contact add")));
+
+    // Lens agents and query filters take contacts too.
+    assert_eq!(env.json_lines(&["lens", "@bob", "--topic", "sushi"], "").len(), 2);
+    assert_eq!(env.json_lines(&["query", "--source", "@bob"], "").len(), 2);
+    assert_eq!(env.json_lines(&["query", "--target", "bob"], "").len(), 1);
+
+    let removed = &env.json_lines(&["contact", "rm", "bob"], "")[0];
+    assert_eq!(removed["removed"], true);
+    env.cmd().args(["contact", "rm", "bob"]).assert().failure().stderr(predicate::str::contains("no contact"));
+    assert_eq!(env.json_lines(&["atom", "-t", "bob", "--no-timestamp"], "")[0]["target"], "bob");
+
+    let info = &env.json_lines(&["info"], "")[0];
+    assert!(info["contacts"].as_str().unwrap().ends_with("contacts.json"));
+}
+
+#[test]
+fn rate_signs_and_stores_from_flags() {
+    let env = Env::new();
+    let alice = env.new_key("default");
+    env.run(&["contact", "add", "sushi-bar", "https://sushi.example"], "");
+    let added = &env.json_lines(&["rate", "-t", "@sushi-bar", "-c", "sushi", "-v", "4/5"], "")[0];
+    assert_eq!(added["added"], true);
+    assert_eq!(added["signed"], true);
+    let stored = &env.json_lines(&["query", "--full"], "")[0];
+    assert_eq!(stored["id"], added["id"]);
+    assert_eq!(stored["atom"]["source"], alice.as_str());
+    assert_eq!(stored["atom"]["target"], "https://sushi.example");
+    assert_eq!(stored["atom"]["value"], "0.8");
+    assert!(stored["credential"]["proof"].is_object());
+
+    // --no-add prints the credential and stores nothing.
+    let credential = env.run(&["rate", "-t", "x", "-v", "-0.5", "--no-add"], "");
+    assert_eq!(env.json_lines(&["verify"], &credential)[0]["valid"], true);
+    assert_eq!(env.json_lines(&["query"], "").len(), 1);
+
+    // Without a terminal, missing answers are an error, not a hang.
+    for args in [&["rate"][..], &["rate", "-t", "x"], &["rate", "-v", "1"]] {
+        env.cmd()
+            .args(args)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("needs --target and --value when not run in a terminal"));
+    }
+    env.cmd().args(["rate", "-t", "x", "-v", "2"]).assert().code(2);
+    env.cmd().args(["rate", "-t", "a b", "-v", "1"]).assert().failure().stderr(predicate::str::contains("whitespace"));
+    Env::new()
+        .cmd()
+        .args(["rate", "-t", "x", "-v", "1"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("trust key new"));
+}
+
+#[test]
+fn lens_value_filters() {
+    let env = Env::new();
+    let (_, bob) = sushi_world(&env);
+    let targets = |args: &[&str]| -> Vec<String> {
+        let mut all = vec!["lens", "--topic", "sushi"];
+        all.extend_from_slice(args);
+        env.json_lines(&all, "").iter().map(|e| e["target"].as_str().unwrap().to_owned()).collect()
+    };
+    assert_eq!(targets(&["--min-value", "0.5"]), [bob.as_str(), "https://sushi.example"]);
+    assert_eq!(targets(&["--max-value", "0"]), ["https://bad.example"]);
+    assert_eq!(targets(&["--min-value", "-1", "--max-value", "4/5"]), ["https://sushi.example", "https://bad.example"]);
+    assert_eq!(targets(&["--min-value", "0.5", "--limit", "1"]), [bob.as_str()]);
+
+    env.cmd().args(["lens", "--min-value", "1.5"]).assert().code(2);
+    env.cmd()
+        .args(["lens", "--min-value", "0.5", "--max-value", "0"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--min-value (0.5) is above --max-value (0)"));
+}
+
+#[test]
+fn lens_explains_each_hop() {
+    let env = Env::new();
+    let (alice, bob) = sushi_world(&env);
+    let plain = env.json_lines(&["lens", "--topic", "sushi"], "");
+    assert!(plain.iter().all(|e| e.get("via").is_none()));
+
+    let explained = env.json_lines(&["lens", "--topic", "sushi", "--explain"], "");
+    assert_eq!(explained.len(), plain.len());
+    let sushi = &explained[1];
+    assert_eq!(sushi["target"], "https://sushi.example");
+    assert_eq!(
+        sushi["via"],
+        json!([{
+            "rater": bob,
+            "value": 0.8,
+            "weight": 0.5,
+            "path": [
+                { "from": alice, "to": bob, "value": 1.0, "weight": 1.0 },
+                { "from": bob, "to": "https://sushi.example", "value": 0.8, "weight": 0.5 },
+            ],
+        }])
+    );
+
+    env.run(&["contact", "add", "bob", &bob], "");
+    let table = env.run(&["lens", "--topic", "sushi", "--explain", "--format", "table"], "");
+    let lines: Vec<_> = table.lines().collect();
+    assert_eq!(lines[0].split_whitespace().collect::<Vec<_>>(), ["TARGET", "SCORE", "CONFIDENCE", "HOPS", "RATERS"]);
+    assert_eq!(lines[1].split_whitespace().collect::<Vec<_>>(), ["@bob", "1", "1", "1", "1"]);
+    assert_eq!(lines[2], "  <- you rated 1, counts 1: you =(1)=> @bob [1]");
+    assert_eq!(lines[3].split_whitespace().collect::<Vec<_>>(), ["https://sushi.example", "0.8", "0.5", "2", "1"]);
+    assert_eq!(lines[4], "  <- @bob rated 0.8, counts 0.5: you =(1)=> @bob [1] =(0.8)=> https://sushi.example [0.5]");
+    assert_eq!(lines.len(), 7);
+
+    // Without --explain the table is just the entries.
+    assert_eq!(env.run(&["lens", "--topic", "sushi", "--format", "table"], "").lines().count(), 4);
+
+    env.cmd().args(["lens", "--explain", "--rollup"]).assert().code(2);
+}
+
+#[test]
+fn lens_draws_graphs() {
+    let env = Env::new();
+    let (alice, bob) = sushi_world(&env);
+    env.run(&["contact", "add", "bob", &bob], "");
+
+    let dot = env.run(&["lens", "--topic", "sushi", "--format", "dot"], "");
+    assert!(dot.starts_with("digraph lens {\n") && dot.ends_with("}\n"), "{dot}");
+    assert!(dot.contains("label=\"Trust lens of you (topic: sushi)\""), "{dot}");
+    assert!(dot.contains(&format!("\"{bob}\" [label=\"@bob\\nscore 1\"];")), "{dot}");
+    assert!(dot.contains(&format!("\"{alice}\" -> \"{bob}\" [label=\"sushi: 1\"];")), "{dot}");
+    assert!(dot.contains(&format!("\"{bob}\" -> \"https://bad.example\" [label=\"sushi: -1\", style=dashed")), "{dot}");
+
+    let mermaid = env.run(&["lens", "--topic", "sushi", "--format", "mermaid"], "");
+    assert!(mermaid.starts_with("---\ntitle: \"Trust lens of you (topic: sushi)\"\n---\nflowchart LR\n"), "{mermaid}");
+    assert!(mermaid.contains("  n0 -->|\"sushi: 1\"| n1\n"), "{mermaid}");
+    assert!(mermaid.contains("-.->|\"sushi: -1\"|"), "{mermaid}");
+
+    // Someone else's lens is titled with their name.
+    let theirs = env.run(&["lens", "@bob", "--topic", "sushi", "--format", "mermaid"], "");
+    assert!(theirs.contains("Trust lens of @bob"), "{theirs}");
+
+    env.cmd()
+        .args(["lens", "--rollup", "--format", "dot"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--rollup"));
+    env.cmd().args(["lens", "--format", "svg"]).assert().code(2);
+}
+
+#[test]
+fn query_table() {
+    let env = Env::new();
+    let (_, bob) = sushi_world(&env);
+    env.run(&["contact", "add", "bob", &bob], "");
+    env.run(&["add"], r#"{"source":"carol","target":"dave"}"#);
+    let table = env.run(&["query", "--format", "table"], "");
+    let lines: Vec<Vec<&str>> = table.lines().map(|l| l.split_whitespace().collect()).collect();
+    assert_eq!(lines[0], ["SOURCE", "TARGET", "CONTENT", "VALUE", "TIMESTAMP", "SIGNED"]);
+    assert_eq!(lines.len(), 5);
+    assert_eq!(&lines[2][..4], ["@bob", "https://sushi.example", "sushi", "0.8"]);
+    assert_eq!(lines[2][5], "yes");
+    assert_eq!(lines[4], ["carol", "dave", "no"]);
+    let full = env.run(&["query", "--full", "--format", "table", "--source", "@bob"], "");
+    assert!(full.lines().next().unwrap().starts_with("ID "));
+    assert!(full.lines().nth(1).unwrap().starts_with("Qm"));
+}

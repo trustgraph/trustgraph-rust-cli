@@ -15,6 +15,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
+use crate::render::{self, GraphFormat, RenderOptions};
 use crate::{Error, Keypair, LensEntry, LensOptions, Result, TrustAtom, TrustGraph, credential};
 
 /// The core's version.
@@ -170,14 +171,29 @@ pub struct LensRequest {
     pub topic: Option<String>,
     /// Ignore unsigned atoms.
     pub signed_only: bool,
-    /// Return at most this many entries.
+    /// Return at most this many entries (after the value filters).
     pub limit: Option<usize>,
+    /// Only return entries scoring at least this much, `-1..=1`.
+    pub min_value: Option<f64>,
+    /// Only return entries scoring at most this much, `-1..=1`.
+    pub max_value: Option<f64>,
+    /// Explain each entry: fill in `via`, the ratings and paths behind it.
+    pub explain: bool,
 }
 
 impl Default for LensRequest {
     fn default() -> Self {
         let defaults = LensOptions::default();
-        Self { depth: defaults.depth, decay: defaults.decay, topic: None, signed_only: false, limit: None }
+        Self {
+            depth: defaults.depth,
+            decay: defaults.decay,
+            topic: None,
+            signed_only: false,
+            limit: None,
+            min_value: None,
+            max_value: None,
+            explain: false,
+        }
     }
 }
 
@@ -186,7 +202,8 @@ impl LensRequest {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::InvalidInput`] if `depth` or `decay` is out of range.
+    /// Returns [`Error::InvalidInput`] if `depth`, `decay`, `minValue` or
+    /// `maxValue` is out of range, or `minValue` is above `maxValue`.
     pub fn options(&self) -> Result<LensOptions> {
         if !(1..=10).contains(&self.depth) {
             return Err(Error::InvalidInput(format!("depth must be 1..=10, got {}", self.depth)));
@@ -194,7 +211,24 @@ impl LensRequest {
         if !(0.0..=1.0).contains(&self.decay) {
             return Err(Error::InvalidInput(format!("decay must be 0..=1, got {}", self.decay)));
         }
-        Ok(LensOptions { depth: self.depth, decay: self.decay, topic: self.topic.clone() })
+        for (name, bound) in [("minValue", self.min_value), ("maxValue", self.max_value)] {
+            if bound.is_some_and(|v| !(-1.0..=1.0).contains(&v)) {
+                return Err(Error::InvalidInput(format!("{name} must be -1..=1, got {}", bound.unwrap_or_default())));
+            }
+        }
+        if let (Some(min), Some(max)) = (self.min_value, self.max_value) {
+            if min > max {
+                return Err(Error::InvalidInput(format!("minValue ({min}) is above maxValue ({max})")));
+            }
+        }
+        Ok(LensOptions {
+            depth: self.depth,
+            decay: self.decay,
+            topic: self.topic.clone(),
+            min_value: self.min_value,
+            max_value: self.max_value,
+            explain: self.explain,
+        })
     }
 }
 
@@ -247,10 +281,32 @@ pub fn rollup(items: Vec<Json>, root: &str, request: &LensRequest, at: &str) -> 
     TrustGraph::rollup(root, &entries, &request.options()?, at)
 }
 
+/// Draws `root`'s lens as a graph: `format` is `"dot"` (Graphviz) or
+/// `"mermaid"`. Entries are always explained (see [`render`]); `labels`
+/// maps identifiers to display names.
+///
+/// # Errors
+///
+/// Fails like [`lens`], or if `format` is unknown.
+pub fn render_lens(
+    items: Vec<Json>,
+    root: &str,
+    format: &str,
+    request: &LensRequest,
+    labels: std::collections::BTreeMap<String, String>,
+) -> Result<String> {
+    let format: GraphFormat = format.parse()?;
+    let request = LensRequest { explain: true, ..request.clone() };
+    let entries = lens(items, root, &request)?;
+    let options = RenderOptions { topic: request.topic.clone(), labels };
+    Ok(render::graph(format, root, &entries, &options))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::collections::BTreeMap;
 
     fn alice() -> KeyInfo {
         keypair_from_seed(&[1; 32]).unwrap()
@@ -371,5 +427,39 @@ mod tests {
             assert_eq!(again, first);
         }
         assert_eq!(signed("x", "1"), signed("x", "1"), "Ed25519 signatures are deterministic");
+    }
+
+    #[test]
+    fn lens_filters_explains_and_renders() {
+        let bob = keypair_from_seed(&[2; 32]).unwrap();
+        let items = vec![
+            json!({ "source": alice().did, "target": bob.did, "value": "1" }),
+            json!({ "source": bob.did, "target": "https://good.example", "value": "0.8" }),
+            json!({ "source": bob.did, "target": "https://bad.example", "value": "-0.6" }),
+        ];
+        let request: LensRequest = serde_json::from_value(json!({ "minValue": 0, "maxValue": 0.9 })).unwrap();
+        let entries = lens(items.clone(), &alice().did, &request).unwrap();
+        assert_eq!(entries.iter().map(|e| e.target.as_str()).collect::<Vec<_>>(), ["https://good.example"]);
+        assert!(entries[0].via.is_none());
+
+        let request: LensRequest = serde_json::from_value(json!({ "explain": true, "maxValue": -0.5 })).unwrap();
+        let entries = serde_json::to_value(lens(items.clone(), &alice().did, &request).unwrap()).unwrap();
+        assert_eq!(entries[0]["target"], "https://bad.example");
+        assert_eq!(entries[0]["via"][0]["rater"], bob.did.as_str());
+        assert_eq!(entries[0]["via"][0]["path"][0]["weight"], 1.0);
+        assert_eq!(entries[0]["via"][0]["path"][1]["weight"], 0.5);
+
+        for (min, max) in [(Some(-2.0), None), (None, Some(1.5)), (Some(0.5), Some(0.0))] {
+            let bad = LensRequest { min_value: min, max_value: max, ..LensRequest::default() };
+            assert!(lens(vec![], "a", &bad).is_err(), "{min:?} {max:?}");
+        }
+
+        let labels = BTreeMap::from([(bob.did.clone(), "bob".to_owned())]);
+        let dot = render_lens(items.clone(), &alice().did, "dot", &LensRequest::default(), labels.clone()).unwrap();
+        assert!(dot.contains("[label=\"bob\\nscore 1\"]"), "{dot}");
+        assert!(dot.contains("-> \"https://bad.example\""), "{dot}");
+        let mermaid = render_lens(items.clone(), &alice().did, "mermaid", &LensRequest::default(), labels).unwrap();
+        assert!(mermaid.contains("flowchart LR"));
+        assert!(render_lens(items, &alice().did, "png", &LensRequest::default(), BTreeMap::new()).is_err());
     }
 }

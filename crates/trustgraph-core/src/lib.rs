@@ -11,6 +11,7 @@
 //! - [`TrustGraph`]: the **Agent Lens**, everything one agent can see
 //!   through the **Trust Cascade** of the agents they trust.
 //! - [`Record`] / [`Query`]: verified atoms and filters over them.
+//! - [`render`]: draw a lens as a Graphviz DOT or Mermaid graph.
 //! - [`api`]: the JSON-shaped API that the CLI, WebAssembly and Node
 //!   wrappers all expose.
 //!
@@ -44,11 +45,12 @@ pub mod keys;
 #[cfg(feature = "random")]
 pub mod random;
 pub mod record;
+pub mod render;
 pub mod value;
 
 pub use atom::TrustAtom;
 pub use error::{Error, Result};
-pub use graph::{LensEntry, LensOptions, TrustGraph};
+pub use graph::{Hop, LensEntry, LensOptions, TrustGraph, Via};
 pub use id::ContentId;
 pub use keys::{Did, Keypair, PublicKey};
 pub use record::{Query, Record};

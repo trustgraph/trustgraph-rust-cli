@@ -100,7 +100,7 @@ proptest! {
             .map(|(s, t, v)| TrustAtom::new(format!("agent{s}"), format!("agent{t}")).with_value(v))
             .collect();
         let graph: TrustGraph = atoms.iter().collect();
-        let entries = graph.lens("agent0", &LensOptions { depth, decay, topic: None });
+        let entries = graph.lens("agent0", &LensOptions { depth, decay, ..LensOptions::default() });
         for entry in &entries {
             prop_assert!((-1.0..=1.0).contains(&entry.score));
             prop_assert!((0.0..=1.0).contains(&entry.confidence));
@@ -110,5 +110,40 @@ proptest! {
         let mut targets: Vec<_> = entries.iter().map(|e| &e.target).collect();
         targets.dedup();
         prop_assert_eq!(targets.len(), entries.len());
+    }
+
+    #[test]
+    fn explanations_match_the_scores(
+        edges in proptest::collection::vec((0u8..6, 0u8..6, value()), 0..40),
+        depth in 1usize..6,
+        decay in 0.0f64..=1.0,
+    ) {
+        let atoms: Vec<TrustAtom> = edges
+            .into_iter()
+            .filter(|(s, t, _)| s != t)
+            .map(|(s, t, v)| TrustAtom::new(format!("agent{s}"), format!("agent{t}")).with_value(v))
+            .collect();
+        let graph: TrustGraph = atoms.iter().collect();
+        let plain = graph.lens("agent0", &LensOptions { depth, decay, ..LensOptions::default() });
+        let explained = graph.lens("agent0", &LensOptions { depth, decay, explain: true, ..LensOptions::default() });
+        prop_assert_eq!(plain.len(), explained.len());
+        for (plain, entry) in plain.iter().zip(&explained) {
+            prop_assert_eq!(&trustgraph_core::LensEntry { via: None, ..entry.clone() }, plain);
+            let via = entry.via.as_ref().unwrap();
+            prop_assert_eq!(via.len(), entry.raters);
+            let strongest = via.iter().map(|v| v.weight).fold(0.0, f64::max);
+            prop_assert!((strongest - entry.confidence).abs() < 1e-9);
+            for v in via {
+                prop_assert!(!v.path.is_empty() && v.path.len() <= depth);
+                prop_assert_eq!(v.path[0].from.as_str(), "agent0");
+                prop_assert_eq!(&v.path.last().unwrap().to, &entry.target);
+                prop_assert_eq!(&v.path.last().unwrap().from, &v.rater);
+                prop_assert!((v.path.last().unwrap().weight - v.weight).abs() < 1e-9);
+                for pair in v.path.windows(2) {
+                    prop_assert_eq!(&pair[0].to, &pair[1].from);
+                    prop_assert!(pair[1].weight <= pair[0].weight + 1e-9, "trust only falls off");
+                }
+            }
+        }
     }
 }

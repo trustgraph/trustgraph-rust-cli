@@ -82,8 +82,9 @@ between them:
 | `toCredential(atom)` | Unsigned W3C Verifiable Credential |
 | `signAtom(atom, secret, created)` | Signed credential (`eddsa-jcs-2022`) |
 | `verify(credential)` | `{valid, id, issuer, atom}` or `{valid: false, error}` |
-| `lens(items, root, options)` | The Agent Lens / Trust Cascade |
+| `lens(items, root, options)` | The Agent Lens / Trust Cascade. `options.minValue` / `maxValue` filter by score; `explain: true` adds `via`, the ratings and hop-by-hop paths behind each score |
 | `rollup(items, root, options, at)` | Lens results as atoms, ready to sign and share |
+| `renderLens(items, root, format, options, labels)` | The lens drawn as Graphviz DOT (`"dot"`) or a Mermaid flowchart (`"mermaid"`) |
 
 The CLI calls the same functions for `verify` and `convert`. TypeScript types
 for both npm packages are in [`bindings/trustgraph.d.ts`](../bindings/trustgraph.d.ts).

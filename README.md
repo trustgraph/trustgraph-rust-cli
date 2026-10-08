@@ -64,11 +64,13 @@ The JavaScript packages, `@trustgraph/trustgraph-wasm` (WebAssembly) and
 trust key new
 # {"name":"default","did":"did:key:z6Mk…"}
 
-# Rate something, sign it, and store it.
-trust atom --target https://sushi.example --content sushi --value 0.9 --sign | trust add
+# Rate something: sign it and store it. In a terminal, plain `trust rate`
+# asks for each answer instead.
+trust rate --target https://sushi.example --content sushi --value 0.9
 
-# Vouch for a friend's taste in sushi (4 out of 5).
-trust atom --target did:key:z6MkFriend… --content sushi --value 4/5 --sign | trust add
+# Name a friend, then vouch for their taste in sushi (4 out of 5).
+trust contact add bob did:key:z6MkFriend…
+trust rate --target @bob --content sushi --value 4/5
 
 # Bring in signed atoms from others (they are verified on the way in).
 trust add friends-atoms.ndjson
@@ -78,30 +80,66 @@ trust lens --topic sushi
 # {"target":"https://sushi.example","score":0.9,"confidence":1.0,"hops":1,"raters":1}
 # {"target":"https://other-sushi.example","score":0.75,"confidence":0.4,"hops":2,"raters":1}
 
+# Why? Show who rated what, and how much trust each hop passed along.
+trust lens --topic sushi --explain --format table
+# TARGET                       SCORE  CONFIDENCE  HOPS  RATERS
+# https://sushi.example        0.9    1           1     1
+#   <- you rated 0.9, counts 1: you =(0.9)=> https://sushi.example [1]
+# @bob                         0.8    1           1     1
+#   <- you rated 0.8, counts 1: you =(0.8)=> @bob [1]
+# https://other-sushi.example  0.75   0.4         2     1
+#   <- @bob rated 0.75, counts 0.4: you =(0.8)=> @bob [0.8] =(0.75)=> https://other-sushi.example [0.4]
+#
+# `=(v)=>` is a rating of v; `[w]` is how much trust is left after that hop.
+
+# Only the places you'd recommend, drawn as a graph.
+trust lens --topic sushi --min-value 0.5 --format dot | dot -Tsvg > sushi.svg
+
 # Cache your lens as signed "rollup" atoms that others can build on.
 trust lens --topic sushi --rollup | trust sign | trust add
 ```
+
+`trust atom … --sign | trust add` does the same as `trust rate`, one step
+at a time, for scripts that want the pieces.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `trust key new\|list\|show\|export\|import` | Manage identities (Ed25519, `did:key`) |
+| `trust rate [-t TARGET] [-v VALUE] [-c CONTENT] [--yes] [--no-add]` | Rate something: create, sign and store an atom. Asks for anything missing when run in a terminal; otherwise `-t` and `-v` are required |
+| `trust contact add NAME DID\|list\|rm NAME` | Name the people you rate, then write `@NAME` instead of their DID |
 | `trust atom -t TARGET [-v VALUE] [-c CONTENT] [--sign]` | Create a Trust Atom. `VALUE` is `-1..=1` or `RATING/BEST` such as `4/5` |
 | `trust sign [FILE]` | Sign atoms as Verifiable Credentials |
 | `trust verify [FILE]` | Verify credentials. Exits 1 if any are invalid |
 | `trust id [FILE]` | Print content IDs (`Qm…` SHA2-256 multihashes) |
 | `trust convert --to atom\|credential\|canonical [FILE]` | Convert between formats |
 | `trust add [FILE]` | Add atoms or signed credentials to the local store |
-| `trust query [--source] [--target] [--topic] [--signed-only]` | Search the local store |
-| `trust lens [AGENT] [--topic] [--depth] [--decay] [--rollup]` | View the graph through an agent's lens |
+| `trust query [--source] [--target] [--topic] [--signed-only] [--format]` | Search the local store |
+| `trust lens [AGENT] [--topic] [--depth] [--decay] [--min-value] [--max-value] [--explain] [--format] [--rollup]` | View the graph through an agent's lens |
 | `trust info` | Show where keys and data live |
 | `trust completions SHELL` | Shell completions |
 
 Input is read from `FILE` or stdin and may be a single JSON document, NDJSON,
-or concatenated JSON. Add `--pretty` to any command for readable output. Keys
-and the store live in the platform data directory, or in `$TRUST_HOME`.
-`$TRUST_KEY` selects the key.
+or concatenated JSON. Add `--pretty` to any command for readable output. Keys,
+contacts and the store live in the platform data directory, or in
+`$TRUST_HOME`. `$TRUST_KEY` selects the key.
+
+**Output formats.** Output is JSON (one object per line) unless you ask for
+something else, whether or not it goes to a terminal, so pipes and scripts
+never change behaviour. `trust lens`, `trust query` and `trust contact list`
+take `--format table` for an aligned table. `trust lens` also takes
+`--format dot` (Graphviz) and `--format mermaid` to draw your lens: you, the
+agents along each path of trust, and every rated target, with each edge
+labelled with its rating (and the topic). Distrust is drawn dashed.
+
+**Contacts.** Wherever `trust` expects an identifier (`--target`,
+`--source`, the lens `AGENT`, query filters), `@NAME` means the contact
+`NAME`, and is an error if there is no such contact. A bare `NAME` is also
+replaced when a contact by that name exists, and is used as is otherwise.
+Contact names may only contain letters, digits, `-` and `_`, so DIDs, URLs
+and anything else with a `:` or `/` are never replaced. Contacts are kept in
+`contacts.json` in the `trust` home; atoms always hold the full identifier.
 
 ## Data model
 
@@ -135,6 +173,13 @@ rating if there is one. Otherwise it is the average of the ratings by agents
 the agent can reach, weighted by how much the agent trusts each of them.
 Distrust is shown but never passed along. With `--topic`, only trust about
 that topic is followed. Details are in [`graph.rs`](crates/trustgraph-core/src/graph.rs).
+
+`--min-value` and `--max-value` keep only results whose score is in range;
+they never change how trust flows. `--explain` adds a `via` list to each
+result: every rating that went into its score (`rater`, `value`, and
+`weight`, how much it counted), with the strongest `path` of trust to that
+rater. Each hop in the path gives the rating (`value`) and the trust left
+after it (`weight`), so you can see trust fall off hop by hop.
 
 ## Library
 
@@ -177,6 +222,8 @@ const credential = tg.signAtom(
 );
 tg.verify(credential); // { valid: true, id: "Qm…", issuer: "did:key:…", atom: {…} }
 tg.lens([credential /* , …everyone else's atoms */], me.did, { topic: "sushi" });
+tg.lens([credential], me.did, { minValue: 0.5, explain: true }); // entries gain `via`
+tg.renderLens([credential], me.did, "mermaid", { topic: "sushi" }); // or "dot"
 ```
 
 ## What's in this repo

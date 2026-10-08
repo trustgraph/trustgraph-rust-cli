@@ -24,6 +24,15 @@
 //!    `decay`). `confidence` is the weight of the most trusted rater.
 //!
 //! Only paths of at most `depth` hops, counting the final rating, are used.
+//!
+//! # Filters and explanations
+//!
+//! [`LensOptions::min_value`] and [`LensOptions::max_value`] keep only
+//! entries whose final *score* is in range; they never change how trust
+//! flows. With [`LensOptions::explain`], each entry also lists, in
+//! [`LensEntry::via`], every rating that went into its score and the
+//! strongest path of trust that led to it, hop by hop (the trust
+//! "falloff").
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -43,11 +52,17 @@ pub struct LensOptions {
     pub decay: f64,
     /// If set, only use atoms about this topic.
     pub topic: Option<String>,
+    /// If set, only return entries scoring at least this much.
+    pub min_value: Option<f64>,
+    /// If set, only return entries scoring at most this much.
+    pub max_value: Option<f64>,
+    /// Fill in [`LensEntry::via`]: how each entry's score came about.
+    pub explain: bool,
 }
 
 impl Default for LensOptions {
     fn default() -> Self {
-        Self { depth: 3, decay: 0.5, topic: None }
+        Self { depth: 3, decay: 0.5, topic: None, min_value: None, max_value: None, explain: false }
     }
 }
 
@@ -65,6 +80,40 @@ pub struct LensEntry {
     pub hops: usize,
     /// Number of agents whose ratings were combined.
     pub raters: usize,
+    /// With [`LensOptions::explain`]: every rating combined into `score`,
+    /// most influential first.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<Vec<Via>>,
+}
+
+/// One rating that contributed to a [`LensEntry`], and how trust reached
+/// the agent who made it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Via {
+    /// Who made the rating (the root itself for a direct rating).
+    pub rater: String,
+    /// The rater's rating of the target, in `-1..=1`.
+    pub value: f64,
+    /// How much this rating counted: 1 for the root's own rating, otherwise
+    /// the rater's weight times `decay`.
+    pub weight: f64,
+    /// The strongest path from the root to the target through the rater.
+    /// The last hop is the rating itself.
+    pub path: Vec<Hop>,
+}
+
+/// One step along a [`Via`] path.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Hop {
+    /// Who gave the rating.
+    pub from: String,
+    /// Who or what was rated.
+    pub to: String,
+    /// The rating, in `-1..=1` (averaged over contents).
+    pub value: f64,
+    /// How much trust is left after this hop: the root's trust in `to`, or,
+    /// on the last hop, how much the rating counts.
+    pub weight: f64,
 }
 
 /// `target → content → (timestamp, value)`: one source's latest ratings.
@@ -151,41 +200,35 @@ impl TrustGraph {
         }
 
         // Each source's edges, computed once (each round revisits agents).
-        let edges: HashMap<&str, BTreeMap<&str, f64>> =
-            self.ratings.keys().map(|source| (source.as_str(), self.edges(source, topic))).collect();
+        let edges: Edges<'_> = self.ratings.keys().map(|source| (source.as_str(), self.edges(source, topic))).collect();
         let no_edges = BTreeMap::new();
         let edges_of = |agent: &str| edges.get(agent).unwrap_or(&no_edges);
 
-        // Reach: best weight to each agent using at most depth - 1 hops
-        // (bounded Bellman-Ford, maximizing the product of weights).
-        let mut reach: BTreeMap<&str, (f64, usize)> = BTreeMap::from([(root, (1.0, 0))]);
-        for hop in 1..options.depth {
-            // Relax from the previous round's snapshot so paths grow by at most one hop per round.
-            let mut next = reach.clone();
-            for (&agent, &(weight, _)) in &reach {
-                let factor = if agent == root { 1.0 } else { decay };
-                for (&target, &value) in edges_of(agent) {
-                    if value <= 0.0 || target == root {
-                        continue;
+        let (reach, paths) = reach(root, &edges, options.depth, decay, options.explain);
+        // The hops along `agent`'s strongest path, with the trust left after each.
+        let hops_to = |agent: &str| -> Vec<Hop> {
+            let Some(paths) = &paths else { return Vec::new() };
+            let mut weight = 1.0;
+            paths[agent]
+                .windows(2)
+                .map(|pair| {
+                    let value = edges_of(pair[0])[pair[1]];
+                    // Same operations, in the same order, as in `reach`, so weights match exactly.
+                    weight = weight * value * if pair[0] == root { 1.0 } else { decay };
+                    Hop {
+                        from: pair[0].to_owned(),
+                        to: pair[1].to_owned(),
+                        value: round9(value),
+                        weight: round9(weight),
                     }
-                    let candidate = weight * value * factor;
-                    // Exact float equality is intended: it only breaks exact ties.
-                    #[allow(clippy::float_cmp)]
-                    let better = next.get(target).is_none_or(|&(w, h)| candidate > w || (candidate == w && hop < h));
-                    if better {
-                        next.insert(target, (candidate, hop));
-                    }
-                }
-            }
-            if next == reach {
-                break;
-            }
-            reach = next;
-        }
+                })
+                .collect()
+        };
 
         // Scores.
         let direct = edges_of(root);
         let mut sums: BTreeMap<&str, (f64, f64, f64, usize, usize)> = BTreeMap::new(); // (Σw·v, Σw, max w, min hops, raters)
+        let mut vias: BTreeMap<&str, Vec<Via>> = BTreeMap::new();
         for (&agent, &(weight, hops)) in &reach {
             if agent == root || weight <= 0.0 {
                 continue;
@@ -204,8 +247,25 @@ impl TrustGraph {
                 e.2 = e.2.max(voice);
                 e.3 = e.3.min(hops + 1);
                 e.4 += 1;
+                if options.explain {
+                    let mut path = hops_to(agent);
+                    path.push(Hop {
+                        from: agent.to_owned(),
+                        to: target.to_owned(),
+                        value: round9(value),
+                        weight: round9(voice),
+                    });
+                    let via = Via { rater: agent.to_owned(), value: round9(value), weight: round9(voice), path };
+                    vias.entry(target).or_default().push(via);
+                }
             }
         }
+        let explain_direct = |target: &str, value: f64| {
+            options.explain.then(|| {
+                let hop = Hop { from: root.to_owned(), to: target.to_owned(), value: round9(value), weight: 1.0 };
+                vec![Via { rater: root.to_owned(), value: round9(value), weight: 1.0, path: vec![hop] }]
+            })
+        };
 
         let mut entries: Vec<LensEntry> = direct
             .iter()
@@ -215,6 +275,7 @@ impl TrustGraph {
                 confidence: 1.0,
                 hops: 1,
                 raters: 1,
+                via: explain_direct(target, value),
             })
             .chain(sums.into_iter().map(|(target, (weighted, total, max, hops, raters))| LensEntry {
                 target: target.to_owned(),
@@ -222,7 +283,15 @@ impl TrustGraph {
                 confidence: round9(max),
                 hops,
                 raters,
+                via: vias.remove(target).map(|mut via| {
+                    via.sort_by(|a, b| b.weight.total_cmp(&a.weight).then_with(|| a.rater.cmp(&b.rater)));
+                    via
+                }),
             }))
+            .filter(|entry| {
+                options.min_value.is_none_or(|min| entry.score >= min)
+                    && options.max_value.is_none_or(|max| entry.score <= max)
+            })
             .collect();
         entries.sort_by(|a, b| {
             b.score
@@ -267,6 +336,57 @@ impl<'a> FromIterator<&'a TrustAtom> for TrustGraph {
         }
         graph
     }
+}
+
+/// Each source's edges: `source → target → value`.
+type Edges<'a> = HashMap<&'a str, BTreeMap<&'a str, f64>>;
+
+/// The agents along each reached agent's strongest path, starting with the root.
+type Paths<'a> = BTreeMap<&'a str, Vec<&'a str>>;
+
+/// Reach: the best weight to each agent using at most `depth - 1` hops
+/// (bounded Bellman-Ford, maximizing the product of weights), with its
+/// number of hops. With `explain`, also each agent's strongest path.
+fn reach<'a>(
+    root: &'a str,
+    edges: &Edges<'a>,
+    depth: usize,
+    decay: f64,
+    explain: bool,
+) -> (BTreeMap<&'a str, (f64, usize)>, Option<Paths<'a>>) {
+    let mut reach: BTreeMap<&str, (f64, usize)> = BTreeMap::from([(root, (1.0, 0))]);
+    let mut paths: Option<Paths<'a>> = explain.then(|| BTreeMap::from([(root, vec![root])]));
+    for hop in 1..depth {
+        // Relax from the previous round's snapshot so paths grow by at most one hop per round.
+        let mut next = reach.clone();
+        let mut next_paths = paths.clone();
+        for (&agent, &(weight, _)) in &reach {
+            let factor = if agent == root { 1.0 } else { decay };
+            for (&target, &value) in edges.get(agent).into_iter().flatten() {
+                if value <= 0.0 || target == root {
+                    continue;
+                }
+                let candidate = weight * value * factor;
+                // Exact float equality is intended: it only breaks exact ties.
+                #[allow(clippy::float_cmp)]
+                let better = next.get(target).is_none_or(|&(w, h)| candidate > w || (candidate == w && hop < h));
+                if better {
+                    next.insert(target, (candidate, hop));
+                    if let (Some(old), Some(new)) = (&paths, &mut next_paths) {
+                        let mut path = old[agent].clone();
+                        path.push(target);
+                        new.insert(target, path);
+                    }
+                }
+            }
+        }
+        if next == reach {
+            break;
+        }
+        reach = next;
+        paths = next_paths;
+    }
+    (reach, paths)
 }
 
 /// Rounds to nine decimal places (the precision of a [`Value`]), hiding
@@ -447,6 +567,89 @@ mod tests {
             assert_eq!(atom.source, "alice");
             assert_eq!(atom.content.as_deref(), Some("sushi"));
             assert_eq!(atom.extra["rollup"], "agent-lens");
+        }
+    }
+
+    #[test]
+    fn value_filters_keep_scores_in_range() {
+        let atoms =
+            [rate("alice", "a", "0.9"), rate("alice", "b", "0.2"), rate("alice", "c", "-0.6"), rate("a", "d", "1")];
+        let graph: TrustGraph = atoms.iter().collect();
+        let targets = |min: Option<f64>, max: Option<f64>| -> Vec<String> {
+            let options = LensOptions { min_value: min, max_value: max, ..LensOptions::default() };
+            graph.lens("alice", &options).into_iter().map(|e| e.target).collect()
+        };
+        assert_eq!(targets(None, None), ["d", "a", "b", "c"]);
+        assert_eq!(targets(Some(0.5), None), ["d", "a"]);
+        assert_eq!(targets(None, Some(0.0)), ["c"]);
+        assert_eq!(targets(Some(0.2), Some(0.9)), ["a", "b"]);
+        // Filters only hide results: `d` is still reached through `a` (filtered out).
+        assert_eq!(targets(Some(1.0), None), ["d"]);
+    }
+
+    #[test]
+    fn explain_is_off_by_default() {
+        let out = lens(&[rate("alice", "bob", "1")], "alice", &LensOptions::default());
+        assert_eq!(out["bob"].via, None);
+        let json = serde_json::to_value(&out["bob"]).unwrap();
+        assert!(json.get("via").is_none(), "no `via` key unless asked: {json}");
+    }
+
+    #[test]
+    fn explain_shows_each_hop_and_its_falloff() {
+        let atoms = [
+            rate("alice", "bob", "0.8"),
+            rate("alice", "carol", "0.5"),
+            rate("bob", "carol", "1"),
+            rate("carol", "dave", "0.5"),
+            rate("bob", "dave", "-1"),
+        ];
+        let explain = LensOptions { explain: true, ..LensOptions::default() };
+        let out = lens(&atoms, "alice", &explain);
+
+        // Direct ratings explain themselves.
+        let bob = out["bob"].via.as_ref().unwrap();
+        assert_eq!(bob.len(), 1);
+        assert_eq!(bob[0].rater, "alice");
+        assert_eq!(bob[0].path, [Hop { from: "alice".into(), to: "bob".into(), value: 0.8, weight: 1.0 }]);
+
+        // dave: rated by bob (weight 0.8, voice 0.4) and carol (weight 0.5, voice 0.25).
+        let dave = &out["dave"];
+        let via = dave.via.as_ref().unwrap();
+        assert_eq!(via.len(), dave.raters);
+        assert_eq!(via.iter().map(|v| v.rater.as_str()).collect::<Vec<_>>(), ["bob", "carol"]);
+        assert!(close(via[0].weight, dave.confidence));
+        assert!(close(via[0].value, -1.0));
+        let hops: Vec<_> = via[1].path.iter().map(|h| (h.from.as_str(), h.to.as_str(), h.value, h.weight)).collect();
+        assert_eq!(hops, [("alice", "carol", 0.5, 0.5), ("carol", "dave", 0.5, 0.25)]);
+        // The score is the weighted average of the explained ratings.
+        let total: f64 = via.iter().map(|v| v.weight).sum();
+        let score = via.iter().map(|v| v.weight * v.value).sum::<f64>() / total;
+        assert!(close(dave.score, score));
+    }
+
+    #[test]
+    fn explain_follows_the_strongest_path() {
+        let atoms = [
+            rate("alice", "weak", "0.1"),
+            rate("weak", "target", "0.1"),
+            rate("alice", "strong", "1"),
+            rate("strong", "middle", "1"),
+            rate("middle", "target", "1"),
+            rate("target", "x", "1"),
+        ];
+        let out = lens(&atoms, "alice", &LensOptions { depth: 4, explain: true, ..LensOptions::default() });
+        let via = &out["x"].via.as_ref().unwrap()[0];
+        let agents: Vec<_> = via.path.iter().map(|h| h.to.as_str()).collect();
+        assert_eq!(agents, ["strong", "middle", "target", "x"]);
+        let weights: Vec<_> = via.path.iter().map(|h| h.weight).collect();
+        assert_eq!(weights, [1.0, 0.5, 0.25, 0.125]);
+        assert!(close(via.weight, out["x"].confidence));
+
+        // Explaining never changes the results themselves.
+        let plain = lens(&atoms, "alice", &LensOptions { depth: 4, ..LensOptions::default() });
+        for (target, entry) in &out {
+            assert_eq!(LensEntry { via: None, ..entry.clone() }, plain[target]);
         }
     }
 }

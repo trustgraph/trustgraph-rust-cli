@@ -32,16 +32,27 @@ pub struct Cli {
 const EXAMPLES: &str = "\
 Examples:
   trust key new
+  trust rate
   trust atom --target https://example.com/sushi-bar --content sushi --value 0.9 --sign | trust add
-  trust query --topic sushi
-  trust lens --topic sushi
-  trust lens --rollup | trust sign | trust add";
+  trust contact add bob did:key:z6Mk...
+  trust query --topic sushi --format table
+  trust lens --topic sushi --explain
+  trust lens --format dot | dot -Tsvg > lens.svg
+  trust lens --rollup | trust sign | trust add
+
+Anywhere an identifier is expected, @NAME means the contact NAME. A bare
+NAME is also replaced when a contact by that name exists (identifiers with
+`:` or `/`, such as DIDs and URLs, never are).";
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Manage your identities (Ed25519 keys, shown as did:key DIDs)
     #[command(subcommand)]
     Key(KeyCommand),
+
+    /// Rate something: create, sign and store a Trust Atom in one go.
+    /// Prompts for anything missing when run in a terminal
+    Rate(RateArgs),
 
     /// Create a Trust Atom: SOURCE trusts TARGET, about CONTENT, VALUE much
     Atom(AtomArgs),
@@ -67,6 +78,10 @@ pub enum Command {
     /// See the world through an agent's lens: their own ratings, plus the
     /// ratings of the agents they trust, cascading outward
     Lens(LensArgs),
+
+    /// Name the people you rate, so you can write @bob instead of a DID
+    #[command(subcommand)]
+    Contact(ContactCommand),
 
     /// Show where keys and data are kept
     Info,
@@ -114,6 +129,92 @@ pub enum KeyCommand {
     },
 }
 
+#[derive(Debug, Subcommand)]
+pub enum ContactCommand {
+    /// Add a contact
+    Add {
+        /// Short name, e.g. `bob` (letters, digits, `-` and `_`)
+        #[arg(value_parser = parse_key_name)]
+        name: String,
+        /// Their identifier: usually a did:key DID, but any identifier works
+        #[arg(value_name = "DID")]
+        did: String,
+        /// Replace an existing contact with the same name
+        #[arg(long)]
+        force: bool,
+    },
+    /// List contacts
+    List {
+        #[command(flatten)]
+        format: ListFormatArg,
+    },
+    /// Remove a contact
+    #[command(alias = "remove")]
+    Rm {
+        /// Name of the contact
+        #[arg(value_parser = parse_key_name)]
+        name: String,
+    },
+}
+
+/// How to print a list of records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+pub enum ListFormat {
+    /// One JSON object per line
+    #[default]
+    Json,
+    /// An aligned table, for reading
+    Table,
+}
+
+#[derive(Debug, Args)]
+pub struct ListFormatArg {
+    /// Output format
+    #[arg(long, value_enum, default_value_t)]
+    pub format: ListFormat,
+}
+
+/// How to print a lens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum)]
+pub enum LensFormat {
+    /// One JSON object per line
+    #[default]
+    Json,
+    /// An aligned table, for reading
+    Table,
+    /// A Graphviz graph (`| dot -Tsvg > lens.svg`)
+    Dot,
+    /// A Mermaid flowchart (paste into Markdown)
+    Mermaid,
+}
+
+#[derive(Debug, Args)]
+pub struct RateArgs {
+    /// Who or what you are rating: a DID, URL, @contact, or other identifier
+    #[arg(short, long)]
+    pub target: Option<String>,
+
+    /// Trust value from -1 (distrust) through 0 (neutral) to 1 (full trust),
+    /// or RATING/BEST (e.g. 4/5)
+    #[arg(short, long, value_parser = parse_value, allow_hyphen_values = true)]
+    pub value: Option<Value>,
+
+    /// What the trust is about: a topic or comma-separated tags
+    #[arg(short, long)]
+    pub content: Option<String>,
+
+    /// Don't ask for confirmation
+    #[arg(short, long)]
+    pub yes: bool,
+
+    /// Print the signed credential instead of adding it to the store
+    #[arg(long)]
+    pub no_add: bool,
+
+    #[command(flatten)]
+    pub key: KeyArg,
+}
+
 #[derive(Debug, Args)]
 pub struct KeyArg {
     /// Name of the key to use
@@ -123,7 +224,7 @@ pub struct KeyArg {
 
 #[derive(Debug, Args)]
 pub struct AtomArgs {
-    /// Who or what is being rated: a DID, URL, or other identifier
+    /// Who or what is being rated: a DID, URL, @contact, or other identifier
     #[arg(short, long)]
     pub target: String,
 
@@ -225,11 +326,14 @@ pub struct QueryArgs {
     /// Print full records (ID, atom, and credential) instead of atoms
     #[arg(long)]
     pub full: bool,
+
+    #[command(flatten)]
+    pub format: ListFormatArg,
 }
 
 #[derive(Debug, Args)]
 pub struct LensArgs {
-    /// Whose lens to look through [default: the DID of --key]
+    /// Whose lens to look through: a DID or @contact [default: the DID of --key]
     pub agent: Option<String>,
 
     /// Maximum hops from the agent to a rating (1 = direct ratings only)
@@ -252,16 +356,37 @@ pub struct LensArgs {
     #[arg(long)]
     pub limit: Option<usize>,
 
+    /// Only show results scoring at least this much (-1..=1 or RATING/BEST)
+    #[arg(long, value_parser = parse_score, allow_hyphen_values = true, value_name = "VALUE")]
+    pub min_value: Option<f64>,
+
+    /// Only show results scoring at most this much (-1..=1 or RATING/BEST)
+    #[arg(long, value_parser = parse_score, allow_hyphen_values = true, value_name = "VALUE")]
+    pub max_value: Option<f64>,
+
+    /// Show how each score came about: every rating combined into it, and
+    /// the path of trust to each rater, with the trust left after each hop
+    #[arg(long)]
+    pub explain: bool,
+
+    /// Output format
+    #[arg(long, value_enum, default_value_t)]
+    pub format: LensFormat,
+
     /// Print rollup atoms (cached trust from the agent's view) instead of
     /// scores; pipe them to `trust sign` to publish them
-    #[arg(long)]
+    #[arg(long, conflicts_with = "explain")]
     pub rollup: bool,
 
     #[command(flatten)]
     pub key: KeyArg,
 }
 
-fn parse_value(s: &str) -> Result<Value, String> {
+fn parse_score(s: &str) -> Result<f64, String> {
+    parse_value(s).map(Value::as_f64)
+}
+
+pub fn parse_value(s: &str) -> Result<Value, String> {
     if let Some((rating, best)) = s.split_once('/') {
         let parse = |x: &str| x.trim().parse::<Decimal>().map_err(|_| format!("`{x}` is not a number"));
         let (rating, best) = (parse(rating)?, parse(best)?);

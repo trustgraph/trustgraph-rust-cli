@@ -66,8 +66,35 @@ export interface LensOptions {
   topic?: string;
   /** Ignore unsigned atoms. */
   signedOnly?: boolean;
-  /** Return at most this many entries. */
+  /** Return at most this many entries (after the value filters). */
   limit?: number;
+  /** Only return entries scoring at least this much, -1..=1. */
+  minValue?: number;
+  /** Only return entries scoring at most this much, -1..=1. */
+  maxValue?: number;
+  /** Fill in `via` on every entry: the ratings and paths behind its score. */
+  explain?: boolean;
+}
+
+/** One step along a path of trust. */
+export interface Hop {
+  from: string;
+  to: string;
+  /** The rating, -1..=1. */
+  value: number;
+  /** Trust left after this hop (on the last hop: how much the rating counts). */
+  weight: number;
+}
+
+/** One rating combined into a lens entry's score, and how trust reached its rater. */
+export interface Via {
+  rater: string;
+  /** The rater's rating of the target, -1..=1. */
+  value: number;
+  /** How much this rating counted (1 for the root's own rating). */
+  weight: number;
+  /** Strongest path from the root to the target through `rater`; the last hop is the rating. */
+  path: Hop[];
 }
 
 export interface LensEntry {
@@ -78,7 +105,12 @@ export interface LensEntry {
   confidence: number;
   hops: number;
   raters: number;
+  /** Present only with `explain: true`; most influential first. */
+  via?: Via[];
 }
+
+/** Graph formats for `renderLens`. */
+export type GraphFormat = "dot" | "mermaid";
 
 /** Atoms and/or signed credentials. */
 export type Item = TrustAtomInput | Credential;
@@ -101,3 +133,11 @@ export function verify(credential: Credential): Verification;
 export function lens(items: Item[], root: string, options?: LensOptions | null): LensEntry[];
 /** Rollup atoms (unsigned) for `root`'s lens, timestamped `at` (RFC 3339). */
 export function rollup(items: Item[], root: string, options: LensOptions | null | undefined, at: string): TrustAtom[];
+/** Draws `root`'s lens as Graphviz DOT or a Mermaid flowchart. `labels` maps identifiers to display names. */
+export function renderLens(
+  items: Item[],
+  root: string,
+  format: GraphFormat,
+  options?: LensOptions | null,
+  labels?: Record<string, string> | null,
+): string;

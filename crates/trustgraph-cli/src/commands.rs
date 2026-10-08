@@ -1,17 +1,23 @@
 //! What each subcommand does.
 
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::io::{self, Read, Write};
 
 use anyhow::{Context, Result, bail};
 use clap::CommandFactory;
 use jiff::{Timestamp, Unit};
 use serde_json::{Value as Json, json};
-use trustgraph_core::api;
-use trustgraph_core::{Keypair, LensOptions, Query, Record, TrustAtom, TrustGraph, credential};
+use trustgraph_core::render::{self, GraphFormat, RenderOptions};
+use trustgraph_core::{Keypair, LensEntry, Query, Record, TrustAtom, TrustGraph, api, credential};
 
-use crate::cli::{AtomArgs, Cli, Command, ConvertArgs, Format, InputArgs, KeyCommand, LensArgs, QueryArgs, SignArgs};
+use crate::cli::{
+    AtomArgs, Cli, Command, ContactCommand, ConvertArgs, Format, InputArgs, KeyCommand, LensArgs, LensFormat,
+    ListFormat, QueryArgs, RateArgs, SignArgs,
+};
 use crate::home::Home;
 use crate::io::{Output, read_json};
+use crate::{prompt, table};
 
 /// Whether the command succeeded. `Failed` means the command ran, but its
 /// answer was "no" (e.g. a signature did not verify).
@@ -25,6 +31,7 @@ pub fn run<W: Write>(cli: Cli, out: &mut Output<W>) -> Result<Outcome> {
     let home = Home::new(cli.home)?;
     match cli.command {
         Command::Key(cmd) => key(&home, cmd, out),
+        Command::Rate(args) => rate(&home, args, out),
         Command::Atom(args) => atom(&home, args, out),
         Command::Sign(args) => sign(&home, &args, out),
         Command::Verify(args) => verify(&args, out),
@@ -33,12 +40,14 @@ pub fn run<W: Write>(cli: Cli, out: &mut Output<W>) -> Result<Outcome> {
         Command::Add(args) => add(&home, &args, out),
         Command::Query(args) => query(&home, args, out),
         Command::Lens(args) => lens(&home, args, out),
+        Command::Contact(cmd) => contact(&home, cmd, out),
         Command::Info => {
             out.json(&json!({
                 "version": env!("CARGO_PKG_VERSION"),
                 "home": home.dir(),
                 "keys": home.keys_dir(),
                 "store": home.store_path(),
+                "contacts": home.contacts_path(),
             }))?;
             Ok(Outcome::Success)
         }
@@ -93,12 +102,13 @@ fn key<W: Write>(home: &Home, cmd: KeyCommand, out: &mut Output<W>) -> Result<Ou
 
 fn atom<W: Write>(home: &Home, args: AtomArgs, out: &mut Output<W>) -> Result<Outcome> {
     let keypair = if args.sign || args.source.is_none() { Some(home.load_key(&args.key.key)?) } else { None };
+    let contacts = home.contacts()?;
     let source = match (&args.source, &keypair) {
-        (Some(source), _) => source.clone(),
+        (Some(source), _) => contacts.resolve(source)?,
         (None, Some(keypair)) => keypair.did().to_string(),
         (None, None) => unreachable!("a key is loaded when there is no --source"),
     };
-    let mut atom = TrustAtom::new(source, args.target);
+    let mut atom = TrustAtom::new(source, contacts.resolve(&args.target)?);
     atom.content = args.content;
     atom.value = args.value;
     atom.extra = args.extra.into_iter().collect();
@@ -183,13 +193,44 @@ fn add<W: Write>(home: &Home, args: &InputArgs, out: &mut Output<W>) -> Result<O
 
 fn query<W: Write>(home: &Home, args: QueryArgs, out: &mut Output<W>) -> Result<Outcome> {
     let store = home.open_store()?;
+    let contacts = home.contacts()?;
+    let resolve = |id: Option<String>| id.map(|id| contacts.resolve(&id)).transpose();
     let q = Query {
-        source: args.source,
-        target: args.target,
+        source: resolve(args.source)?,
+        target: resolve(args.target)?,
         topic: args.topic,
         content_prefix: args.content_prefix,
         signed_only: args.signed_only,
     };
+    if args.format.format == ListFormat::Table {
+        let labels = contacts.labels();
+        let mut headers = vec!["SOURCE", "TARGET", "CONTENT", "VALUE", "TIMESTAMP", "SIGNED"];
+        if args.full {
+            headers.insert(0, "ID");
+        }
+        let rows: Vec<Vec<String>> = store
+            .query(&q)
+            .map(|record| {
+                let atom = &record.atom;
+                let mut row = vec![
+                    table::name(&atom.source, &labels),
+                    table::name(&atom.target, &labels),
+                    atom.content.clone().unwrap_or_default(),
+                    atom.value.map(|v| v.to_string()).unwrap_or_default(),
+                    atom.timestamp.map(|t| t.to_string()).unwrap_or_default(),
+                    if record.is_signed() { "yes" } else { "no" }.to_owned(),
+                ];
+                if args.full {
+                    row.insert(0, record.id.to_string());
+                }
+                row
+            })
+            .collect();
+        for line in table::layout(&headers, &rows) {
+            out.line(&line)?;
+        }
+        return Ok(Outcome::Success);
+    }
     for record in store.query(&q) {
         if args.full {
             out.json(record)?;
@@ -201,14 +242,39 @@ fn query<W: Write>(home: &Home, args: QueryArgs, out: &mut Output<W>) -> Result<
 }
 
 fn lens<W: Write>(home: &Home, args: LensArgs, out: &mut Output<W>) -> Result<Outcome> {
-    let agent = match args.agent {
-        Some(agent) => agent,
-        None => home.load_key(&args.key.key)?.did().to_string(),
+    if args.rollup && args.format != LensFormat::Json {
+        bail!("--rollup prints atoms as JSON; it cannot be combined with --format other than json");
+    }
+    if let (Some(min), Some(max)) = (args.min_value, args.max_value) {
+        if min > max {
+            bail!("--min-value ({min}) is above --max-value ({max}), so nothing could match");
+        }
+    }
+    let contacts = home.contacts()?;
+    let mut labels = contacts.labels();
+    let agent = if let Some(agent) = &args.agent {
+        contacts.resolve(agent)?
+    } else {
+        let did = home.load_key(&args.key.key)?.did().to_string();
+        labels.insert(did.clone(), "you".to_owned());
+        did
     };
+    let graphical = matches!(args.format, LensFormat::Dot | LensFormat::Mermaid);
+    let request = api::LensRequest {
+        depth: usize::from(args.depth),
+        decay: args.decay,
+        topic: args.topic.clone(),
+        signed_only: args.signed_only,
+        limit: args.limit,
+        min_value: args.min_value,
+        max_value: args.max_value,
+        explain: args.explain || graphical,
+    };
+    let options = request.options()?;
+
     let store = home.open_store()?;
     let q = Query { signed_only: args.signed_only, ..Query::default() };
     let graph: TrustGraph = store.query(&q).map(|r| &r.atom).collect();
-    let options = LensOptions { depth: usize::from(args.depth), decay: args.decay, topic: args.topic };
     let mut entries = graph.lens(&agent, &options);
     if let Some(limit) = args.limit {
         entries.truncate(limit);
@@ -217,9 +283,147 @@ fn lens<W: Write>(home: &Home, args: LensArgs, out: &mut Output<W>) -> Result<Ou
         for atom in TrustGraph::rollup(&agent, &entries, &options, now())? {
             out.json(&atom)?;
         }
+        return Ok(Outcome::Success);
+    }
+    match args.format {
+        LensFormat::Json => {
+            for entry in &entries {
+                out.json(entry)?;
+            }
+        }
+        LensFormat::Table => {
+            for line in lens_table(&agent, &entries, &labels) {
+                out.line(&line)?;
+            }
+        }
+        LensFormat::Dot | LensFormat::Mermaid => {
+            let format = if args.format == LensFormat::Dot { GraphFormat::Dot } else { GraphFormat::Mermaid };
+            let options = RenderOptions { topic: args.topic, labels };
+            out.line(render::graph(format, &agent, &entries, &options).trim_end())?;
+        }
+    }
+    Ok(Outcome::Success)
+}
+
+/// The lens as a table. With explanations, each entry is followed by one
+/// line per rating behind it:
+///
+/// ```text
+///   <- @bob rated 0.8, counts 0.5: you =(1)=> @bob [1] =(0.8)=> https://sushi.example [0.5]
+/// ```
+///
+/// `=(v)=>` is a rating of `v`; `[w]` is the trust left after that hop.
+fn lens_table(agent: &str, entries: &[LensEntry], labels: &BTreeMap<String, String>) -> Vec<String> {
+    let rows: Vec<Vec<String>> = entries
+        .iter()
+        .map(|e| {
+            vec![
+                table::name(&e.target, labels),
+                e.score.to_string(),
+                e.confidence.to_string(),
+                e.hops.to_string(),
+                e.raters.to_string(),
+            ]
+        })
+        .collect();
+    let mut lines = table::layout(&["TARGET", "SCORE", "CONFIDENCE", "HOPS", "RATERS"], &rows).into_iter();
+    let mut out: Vec<String> = lines.next().into_iter().collect();
+    for (entry, line) in entries.iter().zip(lines) {
+        out.push(line);
+        for via in entry.via.iter().flatten() {
+            let mut path = table::name(agent, labels);
+            for hop in &via.path {
+                let _ = write!(path, " =({})=> {} [{}]", hop.value, table::name(&hop.to, labels), hop.weight);
+            }
+            let rater = table::name(&via.rater, labels);
+            out.push(format!("  <- {rater} rated {}, counts {}: {path}", via.value, via.weight));
+        }
+    }
+    out
+}
+
+fn rate<W: Write>(home: &Home, args: RateArgs, out: &mut Output<W>) -> Result<Outcome> {
+    let keypair = home.load_key(&args.key.key)?;
+    let contacts = home.contacts()?;
+    let interactive = prompt::interactive();
+    let (target, content, value) = match (args.target, args.value) {
+        (Some(target), Some(value)) => (target, args.content, value),
+        (target, value) if interactive => {
+            let target = match target {
+                Some(target) => target,
+                None => prompt::target(&contacts)?,
+            };
+            let content = match args.content {
+                Some(content) => Some(content),
+                None => prompt::content()?,
+            };
+            let value = match value {
+                Some(value) => value,
+                None => prompt::value()?,
+            };
+            (target, content, value)
+        }
+        _ => bail!(
+            "trust rate needs --target and --value when not run in a terminal, \
+             e.g. `trust rate --target @bob --value 0.9 --content sushi`"
+        ),
+    };
+
+    let mut atom = TrustAtom::new(keypair.did().to_string(), contacts.resolve(&target)?);
+    atom.content = content;
+    atom.value = Some(value);
+    atom.timestamp = Some(now());
+    atom.validate()?;
+
+    if interactive && !args.yes {
+        let about = atom.content.as_deref().map(|c| format!(" about {c}")).unwrap_or_default();
+        let question = format!(
+            "Sign with key `{}`: you trust {} {value}{about}{}?",
+            args.key.key,
+            table::name(&atom.target, &contacts.labels()),
+            if args.no_add { "" } else { ", and store it" },
+        );
+        if !prompt::confirm(&question)? {
+            bail!("cancelled; nothing was signed");
+        }
+    }
+
+    let signed = credential::sign_atom(&atom, &keypair, now())?;
+    if args.no_add {
+        out.json(&signed)?;
     } else {
-        for entry in &entries {
-            out.json(entry)?;
+        let record = Record::from_json(signed)?;
+        let id = record.id;
+        let added = home.open_store()?.add(record)?;
+        out.json(&json!({ "id": id, "added": added, "signed": true }))?;
+    }
+    Ok(Outcome::Success)
+}
+
+fn contact<W: Write>(home: &Home, cmd: ContactCommand, out: &mut Output<W>) -> Result<Outcome> {
+    let mut contacts = home.contacts()?;
+    match cmd {
+        ContactCommand::Add { name, did, force } => {
+            contacts.add(&name, &did, force)?;
+            out.json(&json!({ "name": name, "did": did }))?;
+        }
+        ContactCommand::List { format } => match format.format {
+            ListFormat::Json => {
+                for (name, did) in contacts.iter() {
+                    out.json(&json!({ "name": name, "did": did }))?;
+                }
+            }
+            ListFormat::Table => {
+                let rows: Vec<Vec<String>> =
+                    contacts.iter().map(|(name, did)| vec![format!("@{name}"), did.to_owned()]).collect();
+                for line in table::layout(&["NAME", "DID"], &rows) {
+                    out.line(&line)?;
+                }
+            }
+        },
+        ContactCommand::Rm { name } => {
+            let did = contacts.remove(&name)?;
+            out.json(&json!({ "name": name, "did": did, "removed": true }))?;
         }
     }
     Ok(Outcome::Success)

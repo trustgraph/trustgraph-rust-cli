@@ -12,6 +12,8 @@
 // thrown JS exceptions (documented above), so these pedantic lints don't apply.
 #![allow(clippy::needless_pass_by_value, clippy::missing_errors_doc)]
 
+use std::collections::BTreeMap;
+
 use napi::bindgen_prelude::Uint8Array;
 use napi_derive::napi;
 use serde_json::Value;
@@ -99,4 +101,20 @@ pub fn lens(items: Vec<Value>, root: String, options: Option<Value>) -> Result<V
 #[napi]
 pub fn rollup(items: Vec<Value>, root: String, options: Option<Value>, at: String) -> Result<Value> {
     json(&core(api::rollup(items, &root, &request(options)?, &at))?)
+}
+
+/// Draws `root`'s lens as a graph: `format` is `"dot"` or `"mermaid"`.
+#[napi]
+pub fn render_lens(
+    items: Vec<Value>,
+    root: String,
+    format: String,
+    options: Option<Value>,
+    labels: Option<Value>,
+) -> Result<String> {
+    let labels: BTreeMap<String, String> = match labels {
+        None | Some(Value::Null) => BTreeMap::new(),
+        Some(value) => serde_json::from_value(value).map_err(|e| napi::Error::from_reason(format!("labels: {e}")))?,
+    };
+    core(api::render_lens(items, &root, &format, &request(options)?, labels))
 }

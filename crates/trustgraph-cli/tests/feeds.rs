@@ -183,7 +183,8 @@ fn follow_finds_well_known_feeds_and_supports_no_pull() {
 
     let followed = &bob.json_lines(&["follow", "--no-pull", site.path().to_str().unwrap()])[0];
     assert_eq!(followed["following"], true);
-    assert!(followed["feed"].as_str().unwrap().ends_with(".well-known/trust/index.json"));
+    // Local paths are shown with the platform's separators.
+    assert!(followed["feed"].as_str().unwrap().replace('\\', "/").ends_with(".well-known/trust/index.json"));
     assert_eq!(bob.run(&["query"]), "");
     assert_eq!(bob.json_lines(&["pull"])[0]["added"], 1);
 

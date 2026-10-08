@@ -395,7 +395,7 @@ Trust Establishment and AT Protocol labels.
 
 ## Appendix: history
 
-- **2015–2017:** the original protocol README and the `TrustClaim` JSON-LD
+- **2015–2017:** the [original protocol README](protocol/README.md) and the [`TrustClaim` JSON-LD](../schema/legacy-2017)
   context (`trustgraph-schema`). Values in `0..1`, `Qm…` IDs.
 - **2026, pre-v1** ([PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11)):
   W3C VC 2.0 with `eddsa-jcs-2022`, values in `-1..=1`, `Qm…` IDs, the

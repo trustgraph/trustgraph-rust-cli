@@ -20,7 +20,7 @@ function graph(agents, perAgent) {
     for (let i = 0; i < perAgent; i++) {
       const t = Math.floor(rand() * agents);
       if (t === a) continue;
-      atoms.push({ source: `agent${a}`, target: `agent${t}`, content: "sushi", value: (rand() * 2 - 1).toFixed(3) });
+      atoms.push({ source: `urn:agent:${a}`, target: `urn:agent:${t}`, content: "sushi", value: (rand() * 2 - 1).toFixed(3) });
     }
   }
   return atoms;
@@ -36,11 +36,11 @@ function time(fn, runs = 5) {
 const rows = [["module load", `${loadMs.toFixed(1)} ms`]];
 for (const [agents, perAgent] of [[100, 10], [1000, 10], [5000, 20]]) {
   const atoms = graph(agents, perAgent);
-  const ms = time(() => tg.lens(atoms, "agent0", { topic: "sushi" }));
+  const ms = time(() => tg.lens(atoms, "urn:agent:0", { topic: "sushi" }));
   rows.push([`lens, ${atoms.length} atoms`, `${ms.toFixed(1)} ms`]);
 }
 const key = tg.keypairFromSeed(new Uint8Array(32).fill(7));
-const signed = tg.signAtom({ source: key.did, target: "x", value: 1 }, key.secretKeyMultibase, "2026-01-01T00:00:00Z");
+const signed = tg.signAtom({ source: key.did, target: "https://example.com/x", value: 1 }, key.secretKeyMultibase, "2026-01-01T00:00:00Z");
 rows.push(["verify one credential", `${time(() => tg.verify(signed), 200).toFixed(3)} ms`]);
 rows.push(["heap used", `${(process.memoryUsage().heapUsed / 2 ** 20).toFixed(1)} MiB`]);
 

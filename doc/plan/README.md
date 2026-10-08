@@ -93,6 +93,7 @@ Everything below this line is supporting detail.
 | **v1 data format locked**: [protocol spec](../protocol.md), strict VC 2.0 credential profile, JSON-LD context and vocabulary, JSON Schemas, golden [test vectors](../../test-vectors) ([PR #26](https://github.com/trustgraph/trustgraph-rust-cli/pull/26)) | ✅ |
 | CIDv1 IDs (`bafkrei…`), atom ID vs credential ID, legacy `Qm…` read everywhere; `replaces` supersession ([PR #26](https://github.com/trustgraph/trustgraph-rust-cli/pull/26)) | ✅ |
 | Interop: `@digitalbazaar/vc` verifies `trust` credentials and `trust` verifies theirs, byte-identical, in CI ([PR #26](https://github.com/trustgraph/trustgraph-rust-cli/pull/26)) | ✅ |
+| Secondary formats: `application/vc+jwt` (VC-JOSE-COSE, `Ed25519`) sign/verify, CAIP-261 import/export, `i,j,v` CSV, AT Protocol and Nostr labels, schema.org ([`doc/formats/`](../formats), [PR #27](https://github.com/trustgraph/trustgraph-rust-cli/pull/27)) | ✅ |
 | Context and schemas hosted at `trustgraph.net` | Files ready in [`schema/`](../../schema); hosting to do |
 | Values: exact decimals in `-1..=1`, rounded to nine significant figures | ✅ |
 | `did:key` Ed25519 identities, keystore (`0600`) | ✅ |

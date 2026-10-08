@@ -206,7 +206,8 @@ tg.lens([credential /* , …everyone else's atoms */], me.did, { topic: "sushi" 
 | [`bindings/`](bindings) | TypeScript | Types shared by both npm packages |
 | [`tests/js/`](tests/js) | JavaScript | One smoke test run against every JavaScript build, plus a benchmark |
 | [`scripts/`](scripts) | Shell | Core purity check, WebAssembly packaging |
-| [`doc/`](doc) | | [Architecture](doc/architecture.md) and [roadmap](doc/plan/README.md) |
+| [`doc/`](doc) | | [Architecture](doc/architecture.md), [roadmap](doc/plan/README.md), and the [original protocol text](doc/protocol/README.md) (historical) |
+| [`schema/`](schema) | JSON-LD | [`legacy-2017/`](schema/legacy-2017): the 2017 `TrustClaim` context (historical) |
 
 New projects go in this repo:
 

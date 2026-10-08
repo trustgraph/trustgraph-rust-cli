@@ -41,21 +41,37 @@ curl -fsSL https://raw.githubusercontent.com/trustgraph/trustgraph-rust-cli/refs
 ```
 
 This puts `trust` in `~/.local/bin` (set `TRUST_INSTALL_DIR` to change it). It
-uses a prebuilt binary when the release has one for your platform, and otherwise
+runs the installer from the latest [release](https://github.com/trustgraph/trustgraph-rust-cli/releases),
+which picks the prebuilt binary for your platform (Linux glibc or musl, macOS,
+on x86_64 or Arm), checks its SHA-256 and adds `~/.local/bin` to your PATH
+(`| sh -s -- --no-modify-path` skips that). With no release for your platform it
 builds from source, which needs [Rust](https://rustup.rs) 1.85 or newer.
 [Read the script](install.sh) before you run it if you like.
 
-Or install with cargo directly:
+On Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/trustgraph/trustgraph-rust-cli/releases/latest/download/trustgraph-cli-installer.ps1 | iex"
+```
+
+With Homebrew (macOS, Linux): `brew install trustgraph/tap/trustgraph`.
+
+Or install with cargo:
 
 ```sh
-cargo install --git https://github.com/trustgraph/trustgraph-rust-cli trustgraph-cli
+cargo install trustgraph-cli        # from crates.io
+cargo install --git https://github.com/trustgraph/trustgraph-rust-cli trustgraph-cli   # latest master
 ```
 
 Or from a checkout: `cargo install --path crates/trustgraph-cli`.
 
-The JavaScript packages, `@trustgraph/trustgraph-wasm` (WebAssembly) and
-`@trustgraph/trustgraph` (native), are not on npm yet. To build them locally, see
-[architecture](doc/architecture.md#building).
+The JavaScript packages are `@trustgraph/trustgraph-wasm` (WebAssembly) and
+`@trustgraph/trustgraph` (native, prebuilt for Linux, macOS and Windows) on
+npm: `pnpm add @trustgraph/trustgraph-wasm`. To build them locally, see
+[architecture](doc/architecture.md#building). Releases are cut as described in
+[doc/releasing.md](doc/releasing.md); until the first one, the prebuilt
+binaries, Homebrew, crates.io and npm routes are not live yet and the script
+builds from source.
 
 ## Quick start
 

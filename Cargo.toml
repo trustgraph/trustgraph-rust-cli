@@ -56,6 +56,10 @@ lto = "thin"
 codegen-units = 1
 strip = true
 
+# The profile that `dist` builds release binaries with (dist-workspace.toml).
+[profile.dist]
+inherits = "release"
+
 # Small, fast-loading WebAssembly: `cargo build --profile wasm --target wasm32-unknown-unknown -p trustgraph-wasm`
 [profile.wasm]
 inherits = "release"

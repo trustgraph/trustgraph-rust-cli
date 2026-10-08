@@ -1,0 +1,2 @@
+{"source":"rep.example.net","target":"example.com","content":"spam","value":"-0.976","extra":{"confidence":"0.95","identity":"dkim","reputon-application":"email-id","sample-size":"16938213","updated":"1317795852"}}
+{"source":"rep.example.net","target":"example.com","content":"spam","value":"-0.954","extra":{"confidence":"0.98","identity":"spf","reputon-application":"email-id","sample-size":"16938213","updated":"1317795852"}}

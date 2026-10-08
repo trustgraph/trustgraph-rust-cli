@@ -235,8 +235,8 @@ impl TrustGraph {
 
     /// Turns lens results into *rollup* atoms: cached trust, from the root's
     /// point of view, that can be stored and shared like any other atom.
-    /// Each rollup is marked with `extra.rollup = "agent-lens"` and the
-    /// parameters used.
+    /// Each rollup is marked with `extra.rollup = "agent-lens"`, the
+    /// parameters used, and the entry's `confidence` and number of `raters`.
     ///
     /// # Errors
     ///
@@ -251,7 +251,8 @@ impl TrustGraph {
                     .with_extra("rollup", "agent-lens")
                     .with_extra("depth", options.depth.to_string())
                     .with_extra("decay", options.decay.to_string())
-                    .with_extra("confidence", format!("{:.6}", entry.confidence));
+                    .with_extra("confidence", format!("{:.6}", entry.confidence))
+                    .with_extra("raters", entry.raters.to_string());
                 atom.content.clone_from(&options.topic);
                 Ok(atom)
             })

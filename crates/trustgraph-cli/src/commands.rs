@@ -9,7 +9,9 @@ use serde_json::{Value as Json, json};
 use trustgraph_core::api;
 use trustgraph_core::{Keypair, LensOptions, Query, Record, TrustAtom, TrustGraph, credential};
 
-use crate::cli::{AtomArgs, Cli, Command, ConvertArgs, Format, InputArgs, KeyCommand, LensArgs, QueryArgs, SignArgs};
+use crate::cli::{
+    AtomArgs, Cli, Command, ConvertArgs, Format, InputArgs, InputFormat, KeyCommand, LensArgs, QueryArgs, SignArgs,
+};
 use crate::home::Home;
 use crate::io::{Output, read_json};
 
@@ -159,12 +161,29 @@ fn id<W: Write>(args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
 }
 
 fn convert<W: Write>(args: &ConvertArgs, out: &mut Output<W>) -> Result<Outcome> {
-    for (n, json) in read_items(&args.input)? {
+    let mut items = read_items(&args.input)?;
+    if args.from == Some(InputFormat::Reputon) {
+        let mut atoms = Vec::new();
+        for (n, json) in items {
+            for atom in api::from_reputons(json).with_context(|| format!("item {n}"))? {
+                atoms.push((n, serde_json::to_value(atom)?));
+            }
+        }
+        items = atoms;
+    }
+    let to = args.to.unwrap_or(Format::Atom);
+    if to == Format::Reputon {
+        let response = api::to_reputons(items.into_iter().map(|(_, json)| json).collect())?;
+        out.json(&response)?;
+        return Ok(Outcome::Success);
+    }
+    for (n, json) in items {
         let context = || format!("item {n}");
-        match args.to {
+        match to {
             Format::Atom => out.json(&api::parse_atom(json).with_context(context)?)?,
             Format::Credential => out.json(&api::to_credential(json).with_context(context)?)?,
             Format::Canonical => out.line(&api::canonical_atom(json).with_context(context)?)?,
+            Format::Reputon => unreachable!("handled above"),
         }
     }
     Ok(Outcome::Success)

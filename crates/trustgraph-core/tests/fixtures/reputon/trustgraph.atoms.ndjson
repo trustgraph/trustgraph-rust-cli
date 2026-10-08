@@ -1,0 +1,4 @@
+{"source":"did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK","target":"https://sushi.example","content":"sushi","value":"0.9","timestamp":"2026-10-05T12:00:00Z","extra":{"lang":"en"}}
+{"source":"did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK","target":"did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH","value":"-0.5"}
+{"source":"did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK","target":"https://ramen.example","content":"ramen","value":"0.123456789","timestamp":"2026-10-05T12:00:00.25Z"}
+{"source":"did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK","target":"https://other-sushi.example","content":"sushi","value":"0.75","timestamp":"2026-10-06T00:00:00Z","extra":{"confidence":"0.400000","decay":"0.5","depth":"3","raters":"2","rollup":"agent-lens"}}

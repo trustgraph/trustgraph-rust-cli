@@ -35,6 +35,10 @@ pub enum Error {
     #[error("random number generator failed: {0}")]
     Random(String),
 
+    /// A reputon (RFC 7071) is malformed or can't be converted.
+    #[error("invalid reputon: {0}")]
+    InvalidReputon(String),
+
     /// An argument to an API call was out of range or malformed.
     #[error("invalid input: {0}")]
     InvalidInput(String),

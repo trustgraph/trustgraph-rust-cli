@@ -17,8 +17,12 @@ const view: TG.LensEntry[] = tg.lens([credential, { source: "a", target: "b", va
 const best: number = view[0]?.score ?? 0;
 const rollups: TG.TrustAtom[] = tg.rollup([credential], me.did, null, new Date().toISOString());
 const id: string = tg.atomId(rollups[0]!);
+const reputons: TG.ReputonResponse = tg.toReputons(rollups);
+const rating: number = reputons.reputons[0]?.rating ?? 0;
+const sampleSize: number | undefined = reputons.reputons[0]?.["sample-size"];
+const back: TG.TrustAtom[] = tg.fromReputons(reputons);
 
 // @ts-expect-error depth must be a number
 tg.lens([], me.did, { depth: "3" });
 
-export { atom, best, id, fromSeed };
+export { atom, best, id, fromSeed, rating, sampleSize, back };

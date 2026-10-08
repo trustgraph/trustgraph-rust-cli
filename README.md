@@ -91,7 +91,7 @@ trust lens --topic sushi --rollup | trust sign | trust add
 | `trust sign [FILE]` | Sign atoms as Verifiable Credentials |
 | `trust verify [FILE]` | Verify credentials. Exits 1 if any are invalid |
 | `trust id [FILE]` | Print content IDs (`Qm…` SHA2-256 multihashes) |
-| `trust convert --to atom\|credential\|canonical [FILE]` | Convert between formats |
+| `trust convert --to atom\|credential\|canonical\|reputon [--from reputon] [FILE]` | Convert between formats, including [IETF reputons](#reputons) |
 | `trust add [FILE]` | Add atoms or signed credentials to the local store |
 | `trust query [--source] [--target] [--topic] [--signed-only]` | Search the local store |
 | `trust lens [AGENT] [--topic] [--depth] [--decay] [--rollup]` | View the graph through an agent's lens |
@@ -125,6 +125,25 @@ hashes identically everywhere, but numbers are accepted on input.
 Signed, it becomes a Verifiable Credential: `source` is the `issuer`,
 `target` is the `credentialSubject.id`, and `timestamp` is `validFrom`.
 Verification checks that the issuer is the key that signed it.
+
+### Reputons
+
+`trust convert --to reputon` exports atoms (or credentials, or lens
+rollups) as one IETF reputation response, `application/reputon+json`
+([RFC 7071](https://www.rfc-editor.org/rfc/rfc7071)), so existing reputation
+systems can read them. `--from reputon` imports them again.
+
+```sh
+trust atom -t https://sushi.example -c sushi -v 0.9 | trust convert --to reputon
+# {"application":"trustgraph","reputons":[{"rater":"did:key:z6Mk…","assertion":"sushi","rated":"https://sushi.example","rating":0.95,"generated":1791201600}]}
+trust lens --topic sushi --rollup | trust convert --to reputon   # adds confidence and sample-size
+trust convert --from reputon ratings.json | trust add
+```
+
+The source is the `rater`, the target is `rated`, the content is the
+`assertion` (`trust` if there is none), and the value maps linearly onto the
+`0..1` rating: `rating = (value + 1) / 2`. Round trips are lossless apart from
+a few documented edge cases. See [doc/formats/reputon.md](doc/formats/reputon.md).
 
 ### How the lens works
 

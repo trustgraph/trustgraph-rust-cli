@@ -83,6 +83,41 @@ export interface LensEntry {
 /** Atoms and/or signed credentials. */
 export type Item = TrustAtomInput | Credential;
 
+/** One IETF reputon (RFC 7071 §3.1): `rater` rates `rated` `rating` (0..=1) for `assertion`. */
+export interface Reputon {
+  /** The atom's source. */
+  rater: string;
+  /** The atom's content, or "trust" when it has none. */
+  assertion: string;
+  /** The atom's target. */
+  rated: string;
+  /** 0..=1: `(value + 1) / 2`. */
+  rating: number;
+  /** 0..=1. Rollups: the lens confidence. */
+  confidence?: number;
+  /** 0..=1. */
+  "normal-rating"?: number;
+  /** Rollups: the number of raters. */
+  "sample-size"?: number;
+  /** Seconds since 1970: the atom's timestamp. */
+  generated?: number;
+  /** Seconds since 1970. */
+  expires?: number;
+  /** The atom's `extra` fields. */
+  "trustgraph-extra"?: Record<string, string>;
+  /** The exact RFC 3339 timestamp, when `generated` can't hold it. */
+  "trustgraph-timestamp"?: string;
+  /** Other applications' extension members. */
+  [extension: string]: unknown;
+}
+
+/** An `application/reputon+json` document (RFC 7071). */
+export interface ReputonResponse {
+  /** "trustgraph" for Trust Graph exports. */
+  application: string;
+  reputons: Reputon[];
+}
+
 export function version(): string;
 /** Generates a new identity from a secure random source. Not deterministic: call it in a client or action, not inside a reactive query. */
 export function generateKeypair(): KeyInfo;
@@ -101,3 +136,7 @@ export function verify(credential: Credential): Verification;
 export function lens(items: Item[], root: string, options?: LensOptions | null): LensEntry[];
 /** Rollup atoms (unsigned) for `root`'s lens, timestamped `at` (RFC 3339). */
 export function rollup(items: Item[], root: string, options: LensOptions | null | undefined, at: string): TrustAtom[];
+/** Atoms, credentials (proofs dropped) or rollups as one IETF reputation response (RFC 7071, `application/reputon+json`). */
+export function toReputons(items: Item[]): ReputonResponse;
+/** The atoms in an IETF reputation response (RFC 7071). */
+export function fromReputons(response: ReputonResponse): TrustAtom[];

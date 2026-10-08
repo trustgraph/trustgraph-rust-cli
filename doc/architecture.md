@@ -84,6 +84,8 @@ between them:
 | `verify(credential)` | `{valid, id, issuer, atom}` or `{valid: false, error}` |
 | `lens(items, root, options)` | The Agent Lens / Trust Cascade |
 | `rollup(items, root, options, at)` | Lens results as atoms, ready to sign and share |
+| `toReputons(items)` | Atoms as one IETF reputation response (RFC 7071), see [reputons](formats/reputon.md) |
+| `fromReputons(response)` | The atoms in an IETF reputation response |
 
 The CLI calls the same functions for `verify` and `convert`. TypeScript types
 for both npm packages are in [`bindings/trustgraph.d.ts`](../bindings/trustgraph.d.ts).

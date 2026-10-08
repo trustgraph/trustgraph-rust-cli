@@ -1,0 +1,45 @@
+{
+  "application": "trustgraph",
+  "reputons": [
+    {
+      "rater": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+      "assertion": "sushi",
+      "rated": "https://sushi.example",
+      "rating": 0.95,
+      "generated": 1791201600,
+      "trustgraph-extra": {
+        "lang": "en"
+      }
+    },
+    {
+      "rater": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+      "assertion": "trust",
+      "rated": "did:key:z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH",
+      "rating": 0.25
+    },
+    {
+      "rater": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+      "assertion": "ramen",
+      "rated": "https://ramen.example",
+      "rating": 0.5617283945,
+      "generated": 1791201600,
+      "trustgraph-timestamp": "2026-10-05T12:00:00.25Z"
+    },
+    {
+      "rater": "did:key:z6MkhaXgBZDvotDkL5257faiztiGiC2QtKLGpbnnEGta2doK",
+      "assertion": "sushi",
+      "rated": "https://other-sushi.example",
+      "rating": 0.875,
+      "confidence": 0.4,
+      "sample-size": 2,
+      "generated": 1791244800,
+      "trustgraph-extra": {
+        "confidence": "0.400000",
+        "decay": "0.5",
+        "depth": "3",
+        "raters": "2",
+        "rollup": "agent-lens"
+      }
+    }
+  ]
+}

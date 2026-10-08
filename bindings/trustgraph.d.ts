@@ -124,6 +124,67 @@ export interface LensEntry {
 /** Atoms and/or signed credentials. */
 export type Item = TrustAtomInput | Credential;
 
+/** A Trust Atom credential secured as `application/vc+jwt` (VC-JOSE-COSE): a compact JWS, `eyJ…`. */
+export type VcJwt = string;
+
+/** A CAIP-261 `PeerTrustCredential` (Web of Trust Primitives), unsigned. */
+export interface PeerTrustCredential {
+  "@context": string[];
+  type: string[];
+  /** RFC 3339: the latest timestamp of its atoms. */
+  issuanceDate?: string;
+  issuer: string | { id: string };
+  credentialSubject: {
+    id: string;
+    trustworthiness: {
+      /** The atom's content. */
+      scope?: string;
+      /** -1..=1: the atom's value. */
+      level: number;
+      reason?: string[];
+      /** Other `extra` fields (a Trust Graph extension). */
+      extra?: Record<string, string>;
+    }[];
+  };
+  [property: string]: unknown;
+}
+
+export interface IjvCsvOptions {
+  /** Only atoms about this topic. */
+  topic?: string;
+  /** Zero and negative values: left out ("drop", the default; EigenTrust needs non-negative trust) or kept. */
+  negative?: "drop" | "keep";
+}
+
+/** An AT Protocol label (`com.atproto.label.defs#label`), unsigned (no `sig`). */
+export interface AtprotoLabel {
+  ver: 1;
+  /** The labeler: the atom's source (a DID). */
+  src: string;
+  /** The atom's target. */
+  uri: string;
+  /** `trusted`, `distrusted`, or `trusted-<topic>` / `distrusted-<topic>`. */
+  val: string;
+  /** A retraction of an earlier label. */
+  neg?: true;
+  /** RFC 3339. */
+  cts: string;
+}
+
+/** An unsigned Nostr NIP-32 label event: add `pubkey`, `id` and `sig` to publish it. */
+export interface NostrLabelEvent {
+  kind: 1985;
+  created_at: number;
+  tags: string[][];
+  content: string;
+}
+
+/** A schema.org JSON-LD document: `{"@context": "https://schema.org", "@graph": Review[]}`. */
+export interface SchemaOrgDocument {
+  "@context": "https://schema.org";
+  "@graph": Record<string, unknown>[];
+}
+
 export function version(): string;
 /** Generates a new identity from a secure random source. Not deterministic: call it in a client or action, not inside a reactive query. */
 export function generateKeypair(): KeyInfo;
@@ -148,3 +209,19 @@ export function verify(credential: Credential): Verification;
 export function lens(items: Item[], root: string, options?: LensOptions | null): LensEntry[];
 /** Rollup atoms (unsigned) for `root`'s lens, timestamped `at` (RFC 3339). */
 export function rollup(items: Item[], root: string, options: LensOptions | null | undefined, at: string): TrustAtom[];
+/** Signs an atom as an `application/vc+jwt` (VC-JOSE-COSE, `alg: "Ed25519"`). `created` stamps an atom without a timestamp. */
+export function signVcJwt(atom: Item, secretKeyMultibase: string, created: string): VcJwt;
+/** Verifies an `application/vc+jwt` as strictly as `verify`. `credentialId` is the CID of the JWT's bytes. */
+export function verifyVcJwt(jwt: VcJwt): Verification;
+/** Current atoms (signed ones verified, superseded ones left out) as CAIP-261 `PeerTrustCredential`s, one per source and target. */
+export function toPeerTrust(items: Item[]): PeerTrustCredential[];
+/** The atoms in a CAIP-261 `PeerTrustCredential`. Its proof is not checked. */
+export function fromPeerTrust(credential: PeerTrustCredential): TrustAtom[];
+/** Current atoms as an OpenRank / EigenTrust `i,j,v` local-trust CSV. */
+export function toIjvCsv(items: Item[], options?: IjvCsvOptions | null): string;
+/** Current atoms as unsigned AT Protocol labels, with `neg` labels for superseded ones. */
+export function toAtprotoLabels(items: Item[]): AtprotoLabel[];
+/** Current atoms as unsigned Nostr NIP-32 label events (kind 1985). */
+export function toNostrLabels(items: Item[]): NostrLabelEvent[];
+/** Current atoms as schema.org `Review`s with `Rating`s from -1 to 1. */
+export function toSchemaOrg(items: Item[]): SchemaOrgDocument;

@@ -87,6 +87,11 @@ between them:
 | `verify(credential)` | `{valid, id, credentialId, issuer, atom}` or `{valid: false, error}` |
 | `lens(items, root, options)` | The Agent Lens / Trust Cascade |
 | `rollup(items, root, options, at)` | Lens results as atoms, ready to sign and share |
+| `signVcJwt(atom, secret, created)` / `verifyVcJwt(jwt)` | `application/vc+jwt` (VC-JOSE-COSE), the JOSE alternative to `signAtom` / `verify` |
+| `toPeerTrust(items)` / `fromPeerTrust(credential)` | CAIP-261 `PeerTrustCredential`s |
+| `toIjvCsv(items, options)` | OpenRank / EigenTrust `i,j,v` CSV |
+| `toAtprotoLabels(items)` / `toNostrLabels(items)` | Unsigned AT Protocol labels / Nostr NIP-32 events |
+| `toSchemaOrg(items)` | schema.org `Review` JSON-LD |
 
 The CLI calls the same functions for `verify` and `convert`. TypeScript types
 for both npm packages are in [`bindings/trustgraph.d.ts`](../bindings/trustgraph.d.ts).

@@ -16,6 +16,7 @@ use napi::bindgen_prelude::Uint8Array;
 use napi_derive::napi;
 use serde_json::Value;
 use trustgraph_core::api::{self, LensRequest};
+use trustgraph_core::export::ijv::CsvOptions;
 
 type Result<T> = napi::Result<T>;
 
@@ -117,4 +118,56 @@ pub fn lens(items: Vec<Value>, root: String, options: Option<Value>) -> Result<V
 #[napi]
 pub fn rollup(items: Vec<Value>, root: String, options: Option<Value>, at: String) -> Result<Value> {
     json(&core(api::rollup(items, &root, &request(options)?, &at))?)
+}
+
+/// Signs an atom as an `application/vc+jwt` (VC-JOSE-COSE, `alg: Ed25519`).
+#[napi]
+pub fn sign_vc_jwt(atom: Value, secret_key_multibase: String, created: String) -> Result<String> {
+    core(api::sign_vc_jwt(atom, &secret_key_multibase, &created))
+}
+
+/// Verifies an `application/vc+jwt`: `{valid, id?, credentialId?, issuer?, atom?, error?}`.
+#[napi]
+pub fn verify_vc_jwt(jwt: String) -> Result<Value> {
+    json(&api::verify_vc_jwt(&jwt))
+}
+
+/// Current atoms in `items` as unsigned CAIP-261 `PeerTrustCredential`s.
+#[napi]
+pub fn to_peer_trust(items: Vec<Value>) -> Result<Value> {
+    json(&core(api::to_peer_trust(items))?)
+}
+
+/// The atoms in a CAIP-261 `PeerTrustCredential` (its proof is not checked).
+#[napi]
+pub fn from_peer_trust(credential: Value) -> Result<Value> {
+    json(&core(api::from_peer_trust(&credential))?)
+}
+
+/// Current atoms in `items` as an OpenRank / EigenTrust `i,j,v` CSV.
+#[napi]
+pub fn to_ijv_csv(items: Vec<Value>, options: Option<Value>) -> Result<String> {
+    let options: CsvOptions = match options {
+        None | Some(Value::Null) => CsvOptions::default(),
+        Some(value) => serde_json::from_value(value).map_err(|e| napi::Error::from_reason(format!("options: {e}")))?,
+    };
+    core(api::to_ijv_csv(items, &options))
+}
+
+/// Current atoms in `items` as unsigned AT Protocol labels.
+#[napi]
+pub fn to_atproto_labels(items: Vec<Value>) -> Result<Value> {
+    json(&core(api::to_atproto_labels(items))?)
+}
+
+/// Current atoms in `items` as unsigned Nostr NIP-32 label events.
+#[napi]
+pub fn to_nostr_labels(items: Vec<Value>) -> Result<Value> {
+    json(&core(api::to_nostr_labels(items))?)
+}
+
+/// Current atoms in `items` as one schema.org JSON-LD document of `Review`s.
+#[napi]
+pub fn to_schema_org(items: Vec<Value>) -> Result<Value> {
+    core(api::to_schema_org(items))
 }

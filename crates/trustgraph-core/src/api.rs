@@ -15,8 +15,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
+use crate::export::ijv::CsvOptions;
+use crate::export::labels::AtprotoLabel;
 use crate::{
     ContentId, Did, Error, Keypair, LensEntry, LensOptions, Result, Supersession, TrustAtom, TrustGraph, credential,
+    export, jose,
 };
 
 /// The core's version.
@@ -310,6 +313,111 @@ pub fn rollup(items: Vec<Json>, root: &str, request: &LensRequest, at: &str) -> 
     TrustGraph::rollup(root, &entries, &request.options()?, at)
 }
 
+/// Signs an atom as an `application/vc+jwt` compact JWS (VC-JOSE-COSE,
+/// `alg: Ed25519`), the JOSE alternative to [`sign_atom`]. `created` (RFC
+/// 3339) stamps an atom that has no timestamp. A credential is accepted as
+/// input; its proof, if any, is dropped and not checked.
+///
+/// # Errors
+///
+/// Fails like [`sign_atom`].
+pub fn sign_vc_jwt(atom: Json, secret_key_multibase: &str, created: &str) -> Result<String> {
+    let atom = parse_atom(atom)?;
+    let keypair = Keypair::from_secret_multibase(secret_key_multibase)?;
+    let created = created.parse().map_err(|_| Error::InvalidInput(format!("`{created}` is not an RFC 3339 time")))?;
+    jose::sign_atom(&atom, &keypair, created)
+}
+
+/// Verifies an `application/vc+jwt` Trust Atom credential as strictly as
+/// [`verify`] checks Data Integrity proofs, and reports the same way. The
+/// credential ID is the CID of the JWT's bytes. Never fails.
+#[must_use]
+pub fn verify_vc_jwt(jwt: &str) -> Verification {
+    match jose::verify(jwt).and_then(|v| Ok((v.atom.id()?, v))) {
+        Ok((id, verified)) => Verification {
+            valid: true,
+            id: Some(id.to_string()),
+            credential_id: Some(jose::credential_id(jwt).to_string()),
+            issuer: Some(verified.signer.to_string()),
+            atom: Some(verified.atom),
+            error: None,
+        },
+        Err(err) => Verification {
+            valid: false,
+            id: None,
+            credential_id: None,
+            issuer: None,
+            atom: None,
+            error: Some(err.to_string()),
+        },
+    }
+}
+
+/// Current atoms in `items` (atoms and/or credentials, signed ones
+/// verified) as unsigned CAIP-261 `PeerTrustCredential`s, one per source and
+/// target. See [`export::caip261`].
+///
+/// # Errors
+///
+/// Fails if an item is invalid, or an atom has no value; errors name the
+/// item (from 1).
+pub fn to_peer_trust(items: Vec<Json>) -> Result<Vec<Json>> {
+    export::caip261::to_credentials(&export::current(items)?.current)
+}
+
+/// The atoms in a CAIP-261 `PeerTrustCredential` (its proof is not
+/// checked). See [`export::caip261`].
+///
+/// # Errors
+///
+/// Fails if the input is not a `PeerTrustCredential`, is a revocation, or
+/// an entry does not make a valid atom.
+pub fn from_peer_trust(credential: &Json) -> Result<Vec<TrustAtom>> {
+    export::caip261::from_credential(credential)
+}
+
+/// Current atoms in `items` as an OpenRank / EigenTrust `i,j,v` local-trust
+/// CSV. See [`export::ijv`].
+///
+/// # Errors
+///
+/// Fails if an item is invalid.
+pub fn to_ijv_csv(items: Vec<Json>, options: &CsvOptions) -> Result<String> {
+    export::ijv::to_csv(&export::current(items)?.current, options)
+}
+
+/// Current atoms in `items` as unsigned AT Protocol labels, with negations
+/// for superseded ones. See [`export::labels`].
+///
+/// # Errors
+///
+/// Fails if an item is invalid, or a labelled atom has no timestamp, a
+/// source that is not a DID, or content with no ASCII letters.
+pub fn to_atproto_labels(items: Vec<Json>) -> Result<Vec<AtprotoLabel>> {
+    export::labels::to_atproto(&export::current(items)?)
+}
+
+/// Current atoms in `items` as unsigned Nostr NIP-32 label events
+/// (`kind: 1985`). See [`export::labels`].
+///
+/// # Errors
+///
+/// Fails if an item is invalid, or a labelled atom has no timestamp or
+/// content with no ASCII letters.
+pub fn to_nostr_labels(items: Vec<Json>) -> Result<Vec<Json>> {
+    export::labels::to_nostr(&export::current(items)?.current)
+}
+
+/// Current atoms in `items` as one schema.org JSON-LD document of
+/// `Review`s. See [`export::schema_org`].
+///
+/// # Errors
+///
+/// Fails if an item is invalid, or an atom has no value.
+pub fn to_schema_org(items: Vec<Json>) -> Result<Json> {
+    export::schema_org::to_json_ld(&export::current(items)?.current)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -480,6 +588,48 @@ mod tests {
         let request: LensRequest = serde_json::from_str(r#"{"topic":"sushi","signedOnly":true}"#).unwrap();
         assert_eq!(request.depth, 3);
         assert!(request.signed_only);
+    }
+
+    #[test]
+    fn vc_jwt_sign_and_verify() {
+        let atom =
+            json!({ "source": alice().did, "target": "https://sushi.example", "content": "sushi", "value": "0.9" });
+        let jwt = sign_vc_jwt(atom.clone(), &alice().secret_key_multibase, "2024-01-01T00:00:00Z").unwrap();
+        let result = verify_vc_jwt(&jwt);
+        assert!(result.valid, "{result:?}");
+        assert_eq!(result.issuer.as_deref(), Some(alice().did.as_str()));
+        assert_eq!(result.id, verify(&signed("https://sushi.example", "0.9")).id, "same atom, same atom ID");
+        assert_ne!(result.credential_id, result.id);
+        // A Data Integrity credential converts: its proof is dropped.
+        let resigned =
+            sign_vc_jwt(signed("https://sushi.example", "0.9"), &alice().secret_key_multibase, "2030-01-01T00:00:00Z");
+        assert_eq!(resigned.unwrap(), jwt);
+        assert!(sign_vc_jwt(atom, "zNotAKey", "2024-01-01T00:00:00Z").is_err());
+        let bad = verify_vc_jwt("eyJ.x.y");
+        assert!(!bad.valid);
+        assert!(bad.error.unwrap().contains("vc+jwt"));
+    }
+
+    #[test]
+    fn exports_use_current_atoms() {
+        let old = signed("https://sushi.example", "0.9");
+        let new = sign_atom(
+            json!({ "source": alice().did, "target": "https://sushi.example", "content": "sushi", "value": "-0.5" }),
+            &alice().secret_key_multibase,
+            "2024-02-01T00:00:00Z",
+        )
+        .unwrap();
+        let items = vec![old, new];
+        let peer = to_peer_trust(items.clone()).unwrap();
+        assert_eq!(peer.len(), 1);
+        assert_eq!(peer[0]["credentialSubject"]["trustworthiness"], json!([{ "scope": "sushi", "level": -0.5 }]));
+        assert_eq!(from_peer_trust(&peer[0]).unwrap()[0].value.unwrap().to_string(), "-0.5");
+        assert_eq!(to_ijv_csv(items.clone(), &CsvOptions::default()).unwrap(), "i,j,v\n");
+        let labels = to_atproto_labels(items.clone()).unwrap();
+        let vals: Vec<_> = labels.iter().map(|l| (l.val.as_str(), l.neg)).collect();
+        assert_eq!(vals, [("distrusted-sushi", false), ("trusted-sushi", true)]);
+        assert_eq!(to_nostr_labels(items.clone()).unwrap().len(), 1);
+        assert_eq!(to_schema_org(items).unwrap()["@graph"][0]["reviewRating"]["ratingValue"], json!(-0.5));
     }
 
     #[test]

@@ -7,10 +7,12 @@ use clap::CommandFactory;
 use jiff::{Timestamp, Unit};
 use serde_json::{Value as Json, json};
 use trustgraph_core::api;
-use trustgraph_core::{Keypair, LensOptions, Query, Record, Supersession, TrustAtom, TrustGraph, credential};
+use trustgraph_core::export::ijv::{CsvOptions, Negative};
+use trustgraph_core::{Keypair, LensOptions, Query, Record, Supersession, TrustAtom, TrustGraph, credential, jose};
 
 use crate::cli::{
-    AtomArgs, Cli, Command, ConvertArgs, Format, IdArgs, InputArgs, KeyCommand, LensArgs, QueryArgs, SignArgs,
+    AtomArgs, Cli, Command, ConvertArgs, Format, IdArgs, InputArgs, InputFormat, KeyCommand, LensArgs, NegativeArg,
+    QueryArgs, SignArgs,
 };
 use crate::home::Home;
 use crate::io::{Output, read_json};
@@ -31,7 +33,7 @@ pub fn run<W: Write>(cli: Cli, out: &mut Output<W>) -> Result<Outcome> {
         Command::Sign(args) => sign(&home, &args, out),
         Command::Verify(args) => verify(&args, out),
         Command::Id(args) => id(&args, out),
-        Command::Convert(args) => convert(&args, out),
+        Command::Convert(args) => convert(&home, args, out),
         Command::Add(args) => add(&home, &args, out),
         Command::Query(args) => query(&home, args, out),
         Command::Lens(args) => lens(&home, args, out),
@@ -145,7 +147,10 @@ fn sign<W: Write>(home: &Home, args: &SignArgs, out: &mut Output<W>) -> Result<O
 fn verify<W: Write>(args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
     let mut outcome = Outcome::Success;
     for (_, json) in read_items(args)? {
-        let result = api::verify(&json);
+        let result = match &json {
+            Json::String(jwt) => api::verify_vc_jwt(jwt),
+            _ => api::verify(&json),
+        };
         if !result.valid {
             outcome = Outcome::Failed;
         }
@@ -170,14 +175,67 @@ fn id<W: Write>(args: &IdArgs, out: &mut Output<W>) -> Result<Outcome> {
     Ok(Outcome::Success)
 }
 
-fn convert<W: Write>(args: &ConvertArgs, out: &mut Output<W>) -> Result<Outcome> {
-    for (n, json) in read_items(&args.input)? {
-        let context = || format!("item {n}");
-        match args.to {
-            Format::Atom => out.json(&api::parse_atom(json).with_context(context)?)?,
-            Format::Credential => out.json(&api::to_credential(json).with_context(context)?)?,
-            Format::Canonical => out.line(&api::canonical_atom(json).with_context(context)?)?,
+fn convert<W: Write>(home: &Home, args: ConvertArgs, out: &mut Output<W>) -> Result<Outcome> {
+    let mut items = read_items(&args.input)?;
+    match args.from.unwrap_or(InputFormat::Atom) {
+        InputFormat::Atom => {
+            if let Some((n, _)) = items.iter().find(|(_, json)| json.is_string()) {
+                bail!("item {n}: a JWT; use --from vc-jwt to verify and convert it");
+            }
         }
+        InputFormat::VcJwt => {
+            for (n, json) in &mut items {
+                let jwt = json.as_str().with_context(|| format!("item {n}: not a vc+jwt"))?;
+                *json = jose::verify(jwt).with_context(|| format!("item {n}"))?.credential;
+            }
+        }
+        InputFormat::Caip261 => {
+            let mut atoms = Vec::new();
+            for (n, json) in items {
+                for atom in api::from_peer_trust(&json).with_context(|| format!("item {n}"))? {
+                    atoms.push((n, serde_json::to_value(atom)?));
+                }
+            }
+            items = atoms;
+        }
+    }
+
+    let to = args.to.unwrap_or(Format::Atom);
+    let all = || items.iter().map(|(_, json)| json.clone()).collect::<Vec<_>>();
+    match to {
+        Format::Atom | Format::Credential | Format::Canonical | Format::VcJwt => {}
+        Format::Caip261 => return lines(out, &api::to_peer_trust(all())?),
+        Format::IjvCsv => {
+            let negative = match args.negative {
+                NegativeArg::Drop => Negative::Drop,
+                NegativeArg::Keep => Negative::Keep,
+            };
+            out.text(&api::to_ijv_csv(all(), &CsvOptions { topic: args.topic, negative })?)?;
+            return Ok(Outcome::Success);
+        }
+        Format::AtprotoLabel => return lines(out, &api::to_atproto_labels(all())?),
+        Format::NostrLabel => return lines(out, &api::to_nostr_labels(all())?),
+        Format::SchemaOrg => return lines(out, &[api::to_schema_org(all())?]),
+    }
+    let keypair = if to == Format::VcJwt { Some(home.load_key(&args.key.key)?) } else { None };
+    let created = now().to_string();
+    for (n, json) in items {
+        let context = || format!("item {n}");
+        match (&keypair, to) {
+            (Some(keypair), _) => {
+                out.line(&api::sign_vc_jwt(json, &keypair.to_secret_multibase(), &created).with_context(context)?)?;
+            }
+            (None, Format::Credential) => out.json(&api::to_credential(json).with_context(context)?)?,
+            (None, Format::Canonical) => out.line(&api::canonical_atom(json).with_context(context)?)?,
+            (None, _) => out.json(&api::parse_atom(json).with_context(context)?)?,
+        }
+    }
+    Ok(Outcome::Success)
+}
+
+fn lines<W: Write, T: serde::Serialize>(out: &mut Output<W>, values: &[T]) -> Result<Outcome> {
+    for value in values {
+        out.json(value)?;
     }
     Ok(Outcome::Success)
 }

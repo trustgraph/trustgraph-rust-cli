@@ -1,0 +1,77 @@
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Review",
+      "@id": "ipfs://bafkreidamrwamoblnaik6f7yw6cmue3fwkrxlhjzdlg5kabangf5toc4cq",
+      "author": {
+        "@id": "did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2"
+      },
+      "itemReviewed": {
+        "@id": "did:web:bob.example"
+      },
+      "reviewRating": {
+        "@type": "Rating",
+        "ratingValue": 0.8,
+        "bestRating": 1,
+        "worstRating": -1,
+        "reviewAspect": "rust code review"
+      },
+      "datePublished": "2026-10-08T12:00:00Z"
+    },
+    {
+      "@type": "Review",
+      "@id": "ipfs://bafkreidtiv5aqaj4fy5yt74khkj3rl7pidfw2thlxrsjrpq3rqpxlgfjju",
+      "author": {
+        "@id": "did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2"
+      },
+      "itemReviewed": {
+        "@id": "https://sushi.example",
+        "url": "https://sushi.example"
+      },
+      "reviewRating": {
+        "@type": "Rating",
+        "ratingValue": -0.5,
+        "bestRating": 1,
+        "worstRating": -1,
+        "reviewAspect": "sushi"
+      },
+      "datePublished": "2026-10-08T13:00:00Z"
+    },
+    {
+      "@type": "Review",
+      "@id": "ipfs://bafkreifo5hj6gyeranz77jmwurvm36js5ooiq6ua7vrwxckl7ufusftd6u",
+      "author": {
+        "@id": "did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2"
+      },
+      "itemReviewed": {
+        "@id": "nostr:npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg"
+      },
+      "reviewRating": {
+        "@type": "Rating",
+        "ratingValue": 1,
+        "bestRating": 1,
+        "worstRating": -1,
+        "reviewAspect": "nostr"
+      },
+      "datePublished": "2026-10-08T14:00:00Z"
+    },
+    {
+      "@type": "Review",
+      "@id": "ipfs://bafkreidj5dwhe24lf3k7sff7jl774n7xpdziks7oyo2ieoh2vocyedkahy",
+      "author": {
+        "@id": "did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2"
+      },
+      "itemReviewed": {
+        "@id": "did:web:carol.example"
+      },
+      "reviewRating": {
+        "@type": "Rating",
+        "ratingValue": -1,
+        "bestRating": 1,
+        "worstRating": -1
+      },
+      "datePublished": "2026-10-08T15:00:00Z"
+    }
+  ]
+}

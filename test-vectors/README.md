@@ -40,6 +40,20 @@ each with the reason in [`reasons.json`](v1/invalid/reasons.json). All but
 `tampered.json` have valid signatures: they break the v1 profile, not the
 cryptography.
 
+## Exports
+
+[`exports/`](exports) holds one input,
+[`exports/input.ndjson`](exports/input.ndjson) (three credentials signed
+with the key above, one superseding another, and two plain atoms), and what
+each secondary format makes of it: [`vc-jwt.txt`](exports/vc-jwt.txt) (one
+`application/vc+jwt` per input line), [`caip-261.ndjson`](exports/caip-261.ndjson),
+[`ijv.csv`](exports/ijv.csv) and [`ijv.negative-keep.csv`](exports/ijv.negative-keep.csv),
+[`atproto-labels.ndjson`](exports/atproto-labels.ndjson),
+[`nostr-labels.ndjson`](exports/nostr-labels.ndjson) and
+[`schema-org.jsonld`](exports/schema-org.jsonld). The mappings are in
+[`doc/formats/`](../doc/formats); [`crates/trustgraph-core/tests/exports.rs`](../crates/trustgraph-core/tests/exports.rs)
+regenerates them, and CI verifies the JWTs with the `jose` library.
+
 ## Regenerating
 
 The v1 vectors should never change. If a deliberate format change needs new
@@ -48,3 +62,6 @@ ones, run:
 ```sh
 TRUSTGRAPH_BLESS=1 cargo test -p trustgraph-core --test vectors
 ```
+
+The exports change only when a mapping does:
+`TRUSTGRAPH_BLESS=1 cargo test -p trustgraph-core --test exports`.

@@ -19,6 +19,7 @@
     "@digitalbazaar/eddsa-jcs-2022-cryptosuite": "^1.0.0",
     "@digitalbazaar/vc": "^7.3.0",
     "ajv": "^8.20.0",
+    "jose": "^6.2.12",
     "jsonld": "^9.0.0",
     "typescript": "^7.0.2"
   }

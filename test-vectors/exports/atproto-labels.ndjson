@@ -1,0 +1,5 @@
+{"ver":1,"src":"did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2","uri":"did:web:bob.example","val":"trusted-rust-code-review","cts":"2026-10-08T12:00:00Z"}
+{"ver":1,"src":"did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2","uri":"https://sushi.example","val":"distrusted-sushi","cts":"2026-10-08T13:00:00Z"}
+{"ver":1,"src":"did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2","uri":"nostr:npub10elfcs4fr0l0r8af98jlmgdh9c8tcxjvz9qkw038js35mp4dma8qzvjptg","val":"trusted-nostr","cts":"2026-10-08T14:00:00Z"}
+{"ver":1,"src":"did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2","uri":"did:web:carol.example","val":"distrusted","cts":"2026-10-08T15:00:00Z"}
+{"ver":1,"src":"did:key:z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2","uri":"https://sushi.example","val":"trusted-sushi","neg":true,"cts":"2026-10-08T15:00:00Z"}

@@ -360,7 +360,7 @@ fn hash_data(proof_config: &Map<String, Json>, document: &Map<String, Json>) -> 
     Ok(data)
 }
 
-fn whole_seconds(t: Timestamp) -> Result<Timestamp> {
+pub(crate) fn whole_seconds(t: Timestamp) -> Result<Timestamp> {
     t.round(TimestampRound::new().smallest(Unit::Second).mode(RoundMode::Trunc))
         .map_err(|e| Error::InvalidCredential(e.to_string()))
 }

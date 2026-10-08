@@ -8,11 +8,15 @@
 //! - [`Keypair`] / [`Did`]: Ed25519 identities as `did:key` DIDs.
 //! - [`credential`]: signed atoms as W3C Verifiable Credentials 2.0, using
 //!   the `eddsa-jcs-2022` cryptosuite, in the strict v1 profile.
+//! - [`jose`]: the same credentials secured as `application/vc+jwt`
+//!   (VC-JOSE-COSE), an alternative to the Data Integrity proof.
 //! - [`ContentId`]: atom and credential IDs, CIDv1 (`bafkrei…`).
 //! - [`context`]: the bundled Trust Graph v1 JSON-LD context.
 //! - [`TrustGraph`]: the **Agent Lens**, everything one agent can see
 //!   through the **Trust Cascade** of the agents they trust.
 //! - [`Record`] / [`Query`]: verified atoms and filters over them.
+//! - [`export`]: other formats: CAIP-261 `PeerTrustCredential`s, `i,j,v`
+//!   CSV (EigenTrust), AT Protocol and Nostr labels, schema.org reviews.
 //! - [`api`]: the JSON-shaped API that the CLI, WebAssembly and Node
 //!   wrappers all expose.
 //!
@@ -42,8 +46,10 @@ pub mod canonical;
 pub mod context;
 pub mod credential;
 pub mod error;
+pub mod export;
 pub mod graph;
 pub mod id;
+pub mod jose;
 pub mod keys;
 #[cfg(feature = "random")]
 pub mod random;

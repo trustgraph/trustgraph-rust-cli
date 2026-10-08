@@ -43,10 +43,10 @@ with all protocol logic in one Rust core. It will be renamed to
 
 **Decisions I need from you** (details in [Open decisions](#open-decisions)):
 
-- **Value range:** [PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11) uses `-1..=1` (negative values express distrust), but trustgraph.net
-  and the protocol README say `0..1`. Confirm, and I'll update those docs.
-- **Domain for schemas:** is `https://trustgraph.net/ns/v1` OK for the
-  JSON-LD context?
+- **Value range** and **context URL:** settled in the v1 format: `-1..=1`,
+  and `https://trustgraph.net/ns/v1` (see [protocol](../protocol.md)). Still
+  to do: update trustgraph.net to `-1..=1`, and host the context there
+  ([schema/README.md](../../schema/README.md)).
 - **Package names:** OK to publish `trustgraph-core` and `trustgraph-cli` on
   crates.io, and `@trustgraph/trustgraph` and `@trustgraph/trustgraph-wasm`
   on npm? An unrelated AI company is also called "TrustGraph".
@@ -90,6 +90,10 @@ Everything below this line is supporting detail.
 |---|---|
 | Workspace: protocol library + `trust` binary ([PR #11](https://github.com/trustgraph/trustgraph-rust-cli/pull/11)) | ✅ |
 | Trust Atoms, validation, canonical JSON (RFC 8785), `Qm…` content IDs | ✅ |
+| **v1 data format locked**: [protocol spec](../protocol.md), strict VC 2.0 credential profile, JSON-LD context and vocabulary, JSON Schemas, golden [test vectors](../../test-vectors) ([PR #26](https://github.com/trustgraph/trustgraph-rust-cli/pull/26)) | ✅ |
+| CIDv1 IDs (`bafkrei…`), atom ID vs credential ID, legacy `Qm…` read everywhere; `replaces` supersession ([PR #26](https://github.com/trustgraph/trustgraph-rust-cli/pull/26)) | ✅ |
+| Interop: `@digitalbazaar/vc` verifies `trust` credentials and `trust` verifies theirs, byte-identical, in CI ([PR #26](https://github.com/trustgraph/trustgraph-rust-cli/pull/26)) | ✅ |
+| Context and schemas hosted at `trustgraph.net` | Files ready in [`schema/`](../../schema); hosting to do |
 | Values: exact decimals in `-1..=1`, rounded to nine significant figures | ✅ |
 | `did:key` Ed25519 identities, keystore (`0600`) | ✅ |
 | W3C VC 2.0 + `eddsa-jcs-2022` sign/verify (passes the spec's test vectors) | ✅ |
@@ -232,8 +236,8 @@ language policy shipped in [PR #15](https://github.com/trustgraph/trustgraph-rus
 
 | # | Question | Recommendation |
 |---|---|---|
-| 1 | Value range | Keep `-1..=1`; `0..1` data is still valid. Update the website and protocol README |
-| 2 | JSON-LD context URL | `https://trustgraph.net/ns/v1` |
+| 1 | Value range | **Decided in v1:** `-1..=1`; `0..1` data is still valid. Update the website |
+| 2 | JSON-LD context URL | **Decided in v1:** `https://trustgraph.net/ns/v1`, vocabulary `https://trustgraph.net/ns#` |
 | 3 | Package names | crates `trustgraph-core`, `trustgraph-cli` (binary `trust`); npm `@trustgraph/trustgraph`, `@trustgraph/trustgraph-wasm` |
 | 4 | Public or private npm | Public: Convex installs native packages from npm at deploy time |
 | 5 | Copyright line in LICENSE | Currently the unfilled Apache template; e.g. "Trust Graph contributors" |

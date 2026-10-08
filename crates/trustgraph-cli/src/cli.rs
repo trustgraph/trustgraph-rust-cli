@@ -55,7 +55,7 @@ pub enum Command {
     /// Print the content ID (a Qm… multihash) of atoms or credentials
     Id(InputArgs),
 
-    /// Convert atoms and credentials between formats
+    /// Convert atoms and credentials between formats, including IETF reputons
     Convert(ConvertArgs),
 
     /// Add atoms or signed credentials to the local store
@@ -188,13 +188,28 @@ pub enum Format {
     Credential,
     /// The atom's canonical JSON (RFC 8785), exactly as hashed
     Canonical,
+    /// One IETF reputation response (RFC 7071, application/reputon+json)
+    /// holding a reputon per atom
+    Reputon,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum InputFormat {
+    /// Trust Atoms or credentials
+    Atom,
+    /// IETF reputation responses (RFC 7071, application/reputon+json)
+    Reputon,
 }
 
 #[derive(Debug, Args)]
 pub struct ConvertArgs {
-    /// Output format
+    /// Output format [default with --from: atom]
+    #[arg(long, value_enum, required_unless_present = "from")]
+    pub to: Option<Format>,
+
+    /// Input format [default: atom]
     #[arg(long, value_enum)]
-    pub to: Format,
+    pub from: Option<InputFormat>,
 
     #[command(flatten)]
     pub input: InputArgs,

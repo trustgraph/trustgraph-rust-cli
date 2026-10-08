@@ -142,3 +142,25 @@ pub fn lens(items: JsValue, root: &str, options: JsValue) -> JsResult<JsValue> {
 pub fn rollup(items: JsValue, root: &str, options: JsValue, at: &str) -> JsResult<JsValue> {
     to_js(&core(api::rollup(from_js(items, "items")?, root, &request(options)?, at))?)
 }
+
+/// Converts atoms, credentials or rollups to one IETF reputation response
+/// (RFC 7071, `application/reputon+json`): `{application, reputons}`.
+///
+/// # Errors
+///
+/// Throws if an item is not a valid atom or has no value.
+#[wasm_bindgen(js_name = toReputons)]
+pub fn to_reputons(items: JsValue) -> JsResult<JsValue> {
+    to_js(&core(api::to_reputons(from_js(items, "items")?))?)
+}
+
+/// Converts an IETF reputation response (RFC 7071) to atoms.
+///
+/// # Errors
+///
+/// Throws if the input is not a valid response, or a reputon doesn't make a
+/// valid atom.
+#[wasm_bindgen(js_name = fromReputons)]
+pub fn from_reputons(response: JsValue) -> JsResult<JsValue> {
+    to_js(&core(api::from_reputons(from_js(response, "response")?))?)
+}

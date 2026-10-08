@@ -1,0 +1,13 @@
+{
+  "application": "baseball",
+  "reputons": [
+    {
+      "rater": "baseball-reference.example.com",
+      "assertion": "strong-hitter",
+      "rated": "Alex Rodriguez",
+      "rating": 0.4,
+      "confidence": 0.2,
+      "sample-size": 50000
+    }
+  ]
+}

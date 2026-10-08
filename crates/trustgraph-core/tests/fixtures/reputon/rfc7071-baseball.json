@@ -1,0 +1,12 @@
+{
+  "application": "baseball",
+  "reputons": [
+    {
+      "rater": "RatingsRUs.example.com",
+      "assertion": "is-good",
+      "rated": "Alex Rodriguez",
+      "rating": 0.99,
+      "sample-size": 50000
+    }
+  ]
+}

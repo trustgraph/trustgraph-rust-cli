@@ -162,6 +162,72 @@ fn convert_formats() {
     assert_eq!(env.run(&["convert", "--to", "atom"], &credential), format!("{atom}\n"));
 
     env.cmd().args(["convert", "--to", "xml"]).write_stdin(atom).assert().code(2);
+    env.cmd().arg("convert").write_stdin(atom).assert().code(2).stderr(predicate::str::contains("--to"));
+}
+
+#[test]
+fn convert_to_and_from_reputons() {
+    let env = Env::new();
+    let atoms = "{\"source\":\"alice\",\"target\":\"bob\",\"content\":\"sushi\",\"value\":\"0.9\",\"timestamp\":\"2026-10-05T12:00:00Z\"}\n\
+                 {\"source\":\"alice\",\"target\":\"carol\",\"value\":\"-1\"}\n";
+
+    // Every input item goes into one response document.
+    let reputons = env.json_lines(&["convert", "--to", "reputon"], atoms);
+    assert_eq!(
+        reputons,
+        [json!({
+            "application": "trustgraph",
+            "reputons": [
+                { "rater": "alice", "assertion": "sushi", "rated": "bob", "rating": 0.95, "generated": 1_791_201_600 },
+                { "rater": "alice", "assertion": "trust", "rated": "carol", "rating": 0.0 },
+            ],
+        })]
+    );
+
+    // And back, losslessly; `--to` defaults to atom.
+    let response = reputons[0].to_string();
+    assert_eq!(env.run(&["convert", "--from", "reputon"], &response), atoms);
+    assert_eq!(env.run(&["convert", "--from", "reputon", "--to", "reputon"], &response), format!("{response}\n"));
+    let credential = env.run(&["convert", "--from", "reputon", "--to", "credential"], &response);
+    assert_eq!(credential.lines().count(), 2);
+    assert!(credential.contains("TrustAtomCredential"));
+
+    // Credentials convert too; atoms without a value can't.
+    assert_eq!(env.json_lines(&["convert", "--to", "reputon"], &credential), reputons);
+    env.cmd()
+        .args(["convert", "--to", "reputon"])
+        .write_stdin("{\"source\":\"a\",\"target\":\"b\",\"value\":1} {\"source\":\"a\",\"target\":\"b\"}")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("item 2").and(predicate::str::contains("no value")));
+    env.cmd()
+        .args(["convert", "--from", "reputon"])
+        .write_stdin(atoms)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("item 1").and(predicate::str::contains("invalid reputon")));
+}
+
+#[test]
+fn lens_rollups_export_as_reputons() {
+    let env = Env::new();
+    let alice = env.new_key("default");
+    let bob = env.new_key("bob");
+    let mut atoms = env.run(&["atom", "-t", &bob, "-c", "sushi", "-v", "1", "--sign"], "");
+    atoms +=
+        &env.run(&["atom", "-t", "https://sushi.example", "-c", "sushi", "-v", "0.6", "--sign", "--key", "bob"], "");
+    env.run(&["add"], &atoms);
+
+    let rollups = env.run(&["lens", "--topic", "sushi", "--rollup"], "");
+    let response = &env.json_lines(&["convert", "--to", "reputon"], &rollups)[0];
+    let sushi =
+        response["reputons"].as_array().unwrap().iter().find(|r| r["rated"] == "https://sushi.example").unwrap();
+    assert_eq!(sushi["rater"], alice.as_str());
+    assert_eq!(sushi["assertion"], "sushi");
+    assert_eq!(sushi["rating"], 0.8);
+    assert_eq!(sushi["confidence"], 0.5);
+    assert_eq!(sushi["sample-size"], 1);
+    assert_eq!(env.run(&["convert", "--from", "reputon"], &response.to_string()), rollups);
 }
 
 #[test]

@@ -55,6 +55,15 @@ const rollups = tg.rollup(items, alice.did, { topic: "sushi" }, now);
 assert.equal(rollups.length, 2);
 assert.equal(tg.verify(tg.signAtom(rollups[0], alice.secretKeyMultibase, now)).valid, true);
 
+const response = tg.toReputons(rollups);
+assert.equal(response.application, "trustgraph");
+const sushi = response.reputons.find((r) => r.rated === "https://sushi.example");
+assert.deepEqual([sushi.rater, sushi.assertion, sushi.rating, sushi.confidence, sushi["sample-size"]], [alice.did, "sushi", 0.9, 0.5, 1]);
+assert.deepEqual(tg.fromReputons(response), rollups);
+assert.deepEqual(tg.fromReputons(tg.toReputons(items)), items.map((c) => tg.parseAtom(c)));
+assert.throws(() => tg.toReputons([{ source: "a", target: "b" }]), /no value/);
+assert.throws(() => tg.fromReputons({ application: "x" }), /reputons/);
+
 assert.equal(tg.canonicalAtom({ target: "b", source: "a" }), '{"source":"a","target":"b"}');
 assert.equal(tg.toCredential({ source: "a", target: "b" }).type[1], "TrustAtomCredential");
 assert.throws(() => tg.parseAtom({ source: "a" }), /target/);

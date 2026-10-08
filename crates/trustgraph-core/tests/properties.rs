@@ -5,7 +5,7 @@
 use jiff::Timestamp;
 use proptest::prelude::*;
 use trustgraph_core::value::Decimal;
-use trustgraph_core::{Keypair, LensOptions, TrustAtom, TrustGraph, Value, credential};
+use trustgraph_core::{Keypair, LensOptions, TrustAtom, TrustGraph, Value, credential, reputon};
 
 fn value() -> impl Strategy<Value = Value> {
     (-1_000_000_000i64..=1_000_000_000).prop_map(|n| Value::new(Decimal::new(n, 9)).unwrap())
@@ -68,6 +68,27 @@ proptest! {
     fn credential_round_trips(atom in atom()) {
         let credential = credential::to_credential(&atom).unwrap();
         prop_assert_eq!(credential::from_credential(&credential).unwrap(), atom);
+    }
+
+    #[test]
+    fn reputon_round_trips(atom in atom(), value in value(), nanos in prop_oneof![Just(0i32), 0i32..1_000_000_000]) {
+        // Lossless except for the documented cases: atoms need a value, and
+        // content "trust" is the default assertion.
+        prop_assume!(atom.content.as_deref() != Some(reputon::DEFAULT_ASSERTION));
+        let timestamp = atom.timestamp.map(|t| Timestamp::new(t.as_second(), nanos).unwrap());
+        let atom = TrustAtom { value: Some(value), timestamp, ..atom };
+        let response = reputon::Response::from_atoms([&atom]).unwrap();
+        let json = serde_json::to_string(&response).unwrap();
+        let rating = response.reputons[0].rating;
+        prop_assert!((0.0..=1.0).contains(&rating));
+        let back = reputon::Response::from_json(serde_json::from_str(&json).unwrap()).unwrap().to_atoms().unwrap();
+        prop_assert_eq!(back, vec![atom]);
+    }
+
+    #[test]
+    fn reputon_ratings_are_monotonic(a in value(), b in value()) {
+        let (ra, rb) = (reputon::value_to_rating(a), reputon::value_to_rating(b));
+        prop_assert_eq!(a.cmp(&b), ra.partial_cmp(&rb).unwrap());
     }
 
     #[test]

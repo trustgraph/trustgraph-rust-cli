@@ -1,0 +1,25 @@
+{
+  "application": "email-id",
+  "reputons": [
+    {
+      "rater": "rep.example.net",
+      "assertion": "spam",
+      "identity": "dkim",
+      "rated": "example.com",
+      "confidence": 0.95,
+      "rating": 0.012,
+      "sample-size": 16938213,
+      "updated": 1317795852
+    },
+    {
+      "rater": "rep.example.net",
+      "assertion": "spam",
+      "identity": "spf",
+      "rated": "example.com",
+      "confidence": 0.98,
+      "rating": 0.023,
+      "sample-size": 16938213,
+      "updated": 1317795852
+    }
+  ]
+}

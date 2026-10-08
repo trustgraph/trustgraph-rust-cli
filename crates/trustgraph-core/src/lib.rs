@@ -11,6 +11,7 @@
 //! - [`TrustGraph`]: the **Agent Lens**, everything one agent can see
 //!   through the **Trust Cascade** of the agents they trust.
 //! - [`Record`] / [`Query`]: verified atoms and filters over them.
+//! - [`reputon`]: atoms as IETF reputons (RFC 7071), and back.
 //! - [`api`]: the JSON-shaped API that the CLI, WebAssembly and Node
 //!   wrappers all expose.
 //!
@@ -44,6 +45,7 @@ pub mod keys;
 #[cfg(feature = "random")]
 pub mod random;
 pub mod record;
+pub mod reputon;
 pub mod value;
 
 pub use atom::TrustAtom;

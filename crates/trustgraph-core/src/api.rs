@@ -15,6 +15,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
+use crate::reputon::Response;
 use crate::{Error, Keypair, LensEntry, LensOptions, Result, TrustAtom, TrustGraph, credential};
 
 /// The core's version.
@@ -247,6 +248,34 @@ pub fn rollup(items: Vec<Json>, root: &str, request: &LensRequest, at: &str) -> 
     TrustGraph::rollup(root, &entries, &request.options()?, at)
 }
 
+/// Converts atoms, credentials (proofs are not checked, and are dropped) or
+/// rollups into one `application/reputon+json` response (RFC 7071) in the
+/// `trustgraph` application. See [`crate::reputon`] for the mapping.
+///
+/// # Errors
+///
+/// Fails if an item is not a valid atom or has no value; the error names
+/// the item (from 1).
+pub fn to_reputons(items: Vec<Json>) -> Result<Response> {
+    let atoms = items
+        .into_iter()
+        .enumerate()
+        .map(|(n, item)| parse_atom(item).map_err(|e| Error::InvalidInput(format!("item {}: {e}", n + 1))))
+        .collect::<Result<Vec<_>>>()?;
+    Response::from_atoms(&atoms)
+}
+
+/// Converts an `application/reputon+json` response (RFC 7071) to validated
+/// atoms. See [`crate::reputon`] for the mapping.
+///
+/// # Errors
+///
+/// Fails if the input is not a valid reputation response, or a reputon
+/// doesn't make a valid atom.
+pub fn from_reputons(response: Json) -> Result<Vec<TrustAtom>> {
+    Response::from_json(response)?.to_atoms()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -358,6 +387,40 @@ mod tests {
         let request: LensRequest = serde_json::from_str(r#"{"topic":"sushi","signedOnly":true}"#).unwrap();
         assert_eq!(request.depth, 3);
         assert!(request.signed_only);
+    }
+
+    #[test]
+    fn reputons_round_trip_and_carry_rollups() {
+        let items = vec![signed("https://a.example", "0.5"), json!({ "source": "a", "target": "b", "value": -1 })];
+        let response = to_reputons(items.clone()).unwrap();
+        let json = serde_json::to_value(&response).unwrap();
+        assert_eq!(json["application"], "trustgraph");
+        assert_eq!(json["reputons"][0]["rating"], 0.75);
+        assert_eq!(json["reputons"][1]["rating"], 0.0);
+        let atoms = from_reputons(json).unwrap();
+        assert_eq!(atoms, items.into_iter().map(|i| parse_atom(i).unwrap()).collect::<Vec<_>>());
+
+        let err = to_reputons(vec![json!({ "source": "a", "target": "b", "value": 1 }), json!({ "source": "a" })]);
+        assert!(err.unwrap_err().to_string().contains("item 2"));
+        assert!(from_reputons(json!({ "application": "trustgraph" })).is_err());
+
+        let bob = keypair_from_seed(&[2; 32]).unwrap();
+        let rollups = rollup(
+            vec![
+                signed(&bob.did, "1"),
+                json!({ "source": bob.did, "target": "https://sushi.example", "value": "0.8" }),
+            ],
+            &alice().did,
+            &LensRequest::default(),
+            "2024-02-01T00:00:00Z",
+        )
+        .unwrap();
+        let items = rollups.iter().map(|a| serde_json::to_value(a).unwrap()).collect();
+        let response = to_reputons(items).unwrap();
+        let sushi = response.reputons.iter().find(|r| r.rated == "https://sushi.example").unwrap();
+        assert_eq!((sushi.rater.as_str(), sushi.rating), (alice().did.as_str(), 0.9));
+        assert_eq!((sushi.confidence, sushi.sample_size), (Some(0.5), Some(1)));
+        assert_eq!(response.to_atoms().unwrap(), rollups);
     }
 
     #[test]

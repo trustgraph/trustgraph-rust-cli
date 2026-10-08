@@ -30,6 +30,8 @@ jobs:
       - run: cargo doc --workspace --no-deps --locked
       - name: trustgraph-core does no I/O
         run: scripts/check-core-purity.sh
+      - name: Shellcheck
+        run: shellcheck install.sh scripts/*.sh
 
   test:
     name: Test (${{ matrix.os }})

@@ -7,6 +7,10 @@ The [Trust Graph](https://trustgraph.net) monorepo: the protocol's reference
 implementation and every project built on it. Trust Graph is an open protocol
 for sourcing and rendering trust relationships.
 
+```sh
+curl -fsSL https://raw.githubusercontent.com/trustgraph/trustgraph-rust-cli/refs/heads/master/install.sh | sh
+```
+
 Everything rests on one pure Rust core, shipped as a command line tool
 (`trust`), a WebAssembly package and a native Node.js module. See
 [what's in this repo](#whats-in-this-repo).
@@ -32,7 +36,16 @@ Everything rests on one pure Rust core, shipped as a command line tool
 
 ## Install
 
-The CLI needs [Rust](https://rustup.rs) 1.85 or newer:
+```sh
+curl -fsSL https://raw.githubusercontent.com/trustgraph/trustgraph-rust-cli/refs/heads/master/install.sh | sh
+```
+
+This puts `trust` in `~/.local/bin` (set `TRUST_INSTALL_DIR` to change it). It
+uses a prebuilt binary when the release has one for your platform, and otherwise
+builds from source, which needs [Rust](https://rustup.rs) 1.85 or newer.
+[Read the script](install.sh) before you run it if you like.
+
+Or install with cargo directly:
 
 ```sh
 cargo install --git https://github.com/trustgraph/trustgraph-rust-cli trustgraph-cli

@@ -11,6 +11,7 @@
 //! - [`TrustGraph`]: the **Agent Lens**, everything one agent can see
 //!   through the **Trust Cascade** of the agents they trust.
 //! - [`Record`] / [`Query`]: verified atoms and filters over them.
+//! - [`feed`]: one agent's signed atoms as a static, signed feed.
 //! - [`api`]: the JSON-shaped API that the CLI, WebAssembly and Node
 //!   wrappers all expose.
 //!
@@ -38,6 +39,7 @@ pub mod atom;
 pub mod canonical;
 pub mod credential;
 pub mod error;
+pub mod feed;
 pub mod graph;
 pub mod id;
 pub mod keys;

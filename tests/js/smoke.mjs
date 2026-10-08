@@ -55,6 +55,17 @@ const rollups = tg.rollup(items, alice.did, { topic: "sushi" }, now);
 assert.equal(rollups.length, 2);
 assert.equal(tg.verify(tg.signAtom(rollups[0], alice.secretKeyMultibase, now)).valid, true);
 
+const feed = tg.buildFeed([items[0]], alice.secretKeyMultibase, now);
+assert.equal(feed.index.owner, alice.did);
+assert.equal(feed.index.atoms.count, 1);
+const fed = tg.verifyFeed(feed.index, feed.atoms);
+assert.equal(fed.valid, true);
+assert.equal(fed.owner, alice.did);
+assert.deepEqual(fed.ids, [tg.atomId(items[0])]);
+assert.equal(tg.verifyFeed(feed.index, feed.atoms.replace('"value":"1"', '"value":"-1"')).valid, false);
+assert.match(tg.verifyFeed(feed.index, "").error, /digest/);
+assert.throws(() => tg.buildFeed([items[1]], alice.secretKeyMultibase, now), /feed owner/);
+
 assert.equal(tg.canonicalAtom({ target: "b", source: "a" }), '{"source":"a","target":"b"}');
 assert.equal(tg.toCredential({ source: "a", target: "b" }).type[1], "TrustAtomCredential");
 assert.throws(() => tg.parseAtom({ source: "a" }), /target/);

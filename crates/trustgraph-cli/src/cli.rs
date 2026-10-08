@@ -35,7 +35,9 @@ Examples:
   trust atom --target https://example.com/sushi-bar --content sushi --value 0.9 --sign | trust add
   trust query --topic sushi
   trust lens --topic sushi
-  trust lens --rollup | trust sign | trust add";
+  trust lens --rollup | trust sign | trust add
+  trust publish --out site --well-known
+  trust follow alice.example && trust pull";
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
@@ -67,6 +69,27 @@ pub enum Command {
     /// See the world through an agent's lens: their own ratings, plus the
     /// ratings of the agents they trust, cascading outward
     Lens(LensArgs),
+
+    /// Publish your signed atoms as a static feed that any web host can serve
+    Publish(PublishArgs),
+
+    /// Follow a feed: fetch it, verify every atom, and add them to the store
+    Follow(FollowArgs),
+
+    /// Stop following a feed (atoms already pulled stay in the store)
+    Unfollow {
+        /// The feed, as given to `trust follow`
+        feed: String,
+    },
+
+    /// List the feeds you follow
+    Following,
+
+    /// Fetch new atoms from the feeds you follow, or from one feed
+    Pull {
+        /// A URL, domain, or local path [default: every feed you follow]
+        feed: Option<String>,
+    },
 
     /// Show where keys and data are kept
     Info,
@@ -158,6 +181,33 @@ pub struct AtomArgs {
 
     #[command(flatten)]
     pub key: KeyArg,
+}
+
+#[derive(Debug, Args)]
+pub struct PublishArgs {
+    /// Directory to write the feed to
+    #[arg(long, short, default_value = "feed", value_name = "DIR")]
+    pub out: PathBuf,
+
+    /// Write to DIR/.well-known/trust/, so `trust follow DOMAIN` finds it
+    /// when DIR is the root of the site
+    #[arg(long)]
+    pub well_known: bool,
+
+    /// Name of the key whose atoms to publish
+    #[arg(long, visible_alias = "as", env = "TRUST_KEY", default_value = "default", value_parser = parse_key_name)]
+    pub key: String,
+}
+
+#[derive(Debug, Args)]
+pub struct FollowArgs {
+    /// The feed: an https:// URL, a bare domain (looks in
+    /// /.well-known/trust/), or a local path or file:// URL
+    pub feed: String,
+
+    /// Only add the feed to the list; don't pull it now
+    #[arg(long)]
+    pub no_pull: bool,
 }
 
 #[derive(Debug, Args)]

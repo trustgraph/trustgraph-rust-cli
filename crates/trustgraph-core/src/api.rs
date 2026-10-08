@@ -15,6 +15,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 
+use crate::feed::{self, Feed};
 use crate::{Error, Keypair, LensEntry, LensOptions, Result, TrustAtom, TrustGraph, credential};
 
 /// The core's version.
@@ -118,7 +119,7 @@ pub fn sign_atom(atom: Json, secret_key_multibase: &str, created: &str) -> Resul
     }
     let atom = parse_atom(atom)?;
     let keypair = Keypair::from_secret_multibase(secret_key_multibase)?;
-    let created = created.parse().map_err(|_| Error::InvalidInput(format!("`{created}` is not an RFC 3339 time")))?;
+    let created = parse_time(created)?;
     credential::sign_atom(&atom, &keypair, created)
 }
 
@@ -156,6 +157,71 @@ pub fn verify(credential: &Json) -> Verification {
         },
         Err(err) => Verification { valid: false, id: None, issuer: None, atom: None, error: Some(err.to_string()) },
     }
+}
+
+/// Builds a feed (`{index, atoms}`: the contents of `index.json` and
+/// `atoms.ndjson`) from signed credentials, all issued by the key, stamped
+/// `updated` (RFC 3339). See [`feed::build`].
+///
+/// # Errors
+///
+/// Fails if the key or time is invalid, or a credential does not verify or
+/// was issued by someone else.
+pub fn build_feed(credentials: &[Json], secret_key_multibase: &str, updated: &str) -> Result<Feed> {
+    let keypair = Keypair::from_secret_multibase(secret_key_multibase)?;
+    feed::build(credentials, &keypair, parse_time(updated)?)
+}
+
+/// The result of [`verify_feed`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeedVerification {
+    /// Whether the whole feed verified: index, digest and every atom.
+    pub valid: bool,
+    /// The owner's DID, if valid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner: Option<String>,
+    /// When the feed was published (RFC 3339), if valid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated: Option<String>,
+    /// The atoms' content IDs, in file order, if valid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ids: Option<Vec<String>>,
+    /// The atoms, in file order, if valid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub atoms: Option<Vec<TrustAtom>>,
+    /// Why verification failed, if it did.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Verifies a feed: `index` is the parsed `index.json`, `atoms` the exact
+/// text of `atoms.ndjson`. Never fails: an invalid feed is reported in the
+/// result, and is all-or-nothing (one bad atom invalidates the feed).
+#[must_use]
+pub fn verify_feed(index: &Json, atoms: &str) -> FeedVerification {
+    match feed::verify(index, atoms) {
+        Ok(verified) => FeedVerification {
+            valid: true,
+            owner: Some(verified.owner.to_string()),
+            updated: Some(verified.index.updated.to_string()),
+            ids: Some(verified.records.iter().map(|r| r.id.to_string()).collect()),
+            atoms: Some(verified.records.into_iter().map(|r| r.atom).collect()),
+            error: None,
+        },
+        Err(err) => FeedVerification {
+            valid: false,
+            owner: None,
+            updated: None,
+            ids: None,
+            atoms: None,
+            error: Some(err.to_string()),
+        },
+    }
+}
+
+fn parse_time(at: &str) -> Result<jiff::Timestamp> {
+    at.parse().map_err(|_| Error::InvalidInput(format!("`{at}` is not an RFC 3339 time")))
 }
 
 /// Options for [`lens`] and [`rollup`]. Missing fields take their defaults.
@@ -242,7 +308,7 @@ pub fn lens(items: Vec<Json>, root: &str, request: &LensRequest) -> Result<Vec<L
 ///
 /// Fails like [`lens`], or if `at` is not an RFC 3339 time.
 pub fn rollup(items: Vec<Json>, root: &str, request: &LensRequest, at: &str) -> Result<Vec<TrustAtom>> {
-    let at = at.parse().map_err(|_| Error::InvalidInput(format!("`{at}` is not an RFC 3339 time")))?;
+    let at = parse_time(at)?;
     let entries = lens(items, root, request)?;
     TrustGraph::rollup(root, &entries, &request.options()?, at)
 }
@@ -358,6 +424,29 @@ mod tests {
         let request: LensRequest = serde_json::from_str(r#"{"topic":"sushi","signedOnly":true}"#).unwrap();
         assert_eq!(request.depth, 3);
         assert!(request.signed_only);
+    }
+
+    #[test]
+    fn build_and_verify_feed() {
+        let items = vec![signed("https://a.example", "0.5"), signed("https://b.example", "-0.5")];
+        let key = alice().secret_key_multibase;
+        let feed = build_feed(&items, &key, "2026-01-01T00:00:00Z").unwrap();
+        let json = serde_json::to_value(&feed).unwrap();
+        assert_eq!(json.as_object().unwrap().keys().collect::<Vec<_>>(), ["index", "atoms"]);
+
+        let result = verify_feed(&feed.index, &feed.atoms);
+        assert!(result.valid, "{result:?}");
+        assert_eq!(result.owner.as_deref(), Some(alice().did.as_str()));
+        assert_eq!(result.updated.as_deref(), Some("2026-01-01T00:00:00Z"));
+        assert_eq!(result.ids.unwrap()[0], atom_id(items[0].clone()).unwrap());
+        assert_eq!(result.atoms.unwrap()[1].target, "https://b.example");
+
+        let tampered = verify_feed(&feed.index, &feed.atoms.replace("-0.5", "0.5"));
+        assert!(!tampered.valid);
+        assert!(tampered.error.unwrap().contains("digest"));
+        assert!(build_feed(&items, &key, "soon").is_err());
+        let bob = keypair_from_seed(&[2; 32]).unwrap();
+        assert!(build_feed(&items, &bob.secret_key_multibase, "2026-01-01T00:00:00Z").is_err());
     }
 
     #[test]

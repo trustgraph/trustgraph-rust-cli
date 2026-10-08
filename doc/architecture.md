@@ -45,6 +45,7 @@ pass everything in:
 | Randomness (key seeds) | 32 random bytes, **or** the opt-in `random` feature (see below) |
 | The current time (signing, rollups) | An RFC 3339 string or `jiff::Timestamp` |
 | Data to score | Atoms and credentials as values: from files (CLI), database rows (servers), IndexedDB (browsers) |
+| Feeds to verify | The text of `index.json` and `atoms.ndjson`, fetched however the host likes (the CLI uses a small blocking HTTPS client) |
 
 Two things follow from this:
 
@@ -84,6 +85,8 @@ between them:
 | `verify(credential)` | `{valid, id, issuer, atom}` or `{valid: false, error}` |
 | `lens(items, root, options)` | The Agent Lens / Trust Cascade |
 | `rollup(items, root, options, at)` | Lens results as atoms, ready to sign and share |
+| `buildFeed(credentials, secret, updated)` | A [feed](feeds.md) (`{index, atoms}`) of your own signed atoms |
+| `verifyFeed(index, atoms)` | `{valid, owner, updated, ids, atoms}` or `{valid: false, error}`, all or nothing |
 
 The CLI calls the same functions for `verify` and `convert`. TypeScript types
 for both npm packages are in [`bindings/trustgraph.d.ts`](../bindings/trustgraph.d.ts).

@@ -26,7 +26,9 @@ Everything rests on one pure Rust core, shipped as a command line tool
   outward with decreasing weight (the **Trust Cascade**).
 - **Unix-friendly.** JSON in, JSON out, one item per line. Commands pipe into
   each other and into `jq`.
-- **Offline.** Nothing needs a server or a network connection.
+- **Offline.** Nothing needs a server or a network connection. To share,
+  publish your atoms as static files on any web host and follow other
+  people's (see [Sharing](#sharing)).
 - **Runs everywhere.** The same core runs on the command line, in browsers,
   Cloudflare Workers, Deno, Node, and inside reactive database queries such as
   Convex's. See [architecture](doc/architecture.md).
@@ -95,6 +97,10 @@ trust lens --topic sushi --rollup | trust sign | trust add
 | `trust add [FILE]` | Add atoms or signed credentials to the local store |
 | `trust query [--source] [--target] [--topic] [--signed-only]` | Search the local store |
 | `trust lens [AGENT] [--topic] [--depth] [--decay] [--rollup]` | View the graph through an agent's lens |
+| `trust publish [--out DIR] [--well-known] [--as KEY]` | Write your signed atoms as a static feed |
+| `trust follow URL\|DOMAIN\|PATH` | Follow a feed: fetch it, verify every atom, store them |
+| `trust pull [FEED]` | Fetch what's new from the feeds you follow (or one feed) |
+| `trust following` / `trust unfollow FEED` | List or stop following feeds |
 | `trust info` | Show where keys and data live |
 | `trust completions SHELL` | Shell completions |
 
@@ -102,6 +108,44 @@ Input is read from `FILE` or stdin and may be a single JSON document, NDJSON,
 or concatenated JSON. Add `--pretty` to any command for readable output. Keys
 and the store live in the platform data directory, or in `$TRUST_HOME`.
 `$TRUST_KEY` selects the key.
+
+## Sharing
+
+Share your ratings by publishing them as a **feed**: two static files
+(`index.json`, signed by you, and `atoms.ndjson`, your signed atoms) that any
+web host can serve. Followers verify every signature before storing
+anything, so the host doesn't need to be trusted. Details in
+[doc/feeds.md](doc/feeds.md).
+
+With GitHub Pages, in a repository called `trust`:
+
+```sh
+# Alice: publish, then push. The feed is at https://alice.github.io/trust/
+trust publish --out docs
+git add docs && git commit -m "Update my trust feed" && git push
+# (once: Settings → Pages → Deploy from a branch → main, /docs)
+
+# Bob: follow Alice, and check for updates whenever you like.
+trust follow https://alice.github.io/trust/
+trust pull
+trust lens --topic sushi     # Alice's ratings now count, as far as Bob trusts her
+```
+
+With your own domain, publish to the site root with `--well-known`, and
+people can follow the bare domain:
+
+```sh
+trust publish --out site --well-known    # site/.well-known/trust/{index.json,atoms.ndjson}
+trust follow alice.example               # → https://alice.example/.well-known/trust/index.json
+```
+
+Pulls are cheap: `trust` remembers each feed's `ETag`, so an unchanged feed
+costs one `304 Not Modified`. It also pins each feed's owner and refuses to
+go back to an older copy. A local directory or `file://` URL works in place
+of a URL, which is handy for testing or for sharing over a synced folder.
+
+Feeds are signed by `did:key` identities today. Signing with a domain
+(`did:web`) is planned.
 
 ## Data model
 
@@ -190,7 +234,7 @@ tg.lens([credential /* , …everyone else's atoms */], me.did, { topic: "sushi" 
 | [`bindings/`](bindings) | TypeScript | Types shared by both npm packages |
 | [`tests/js/`](tests/js) | JavaScript | One smoke test run against every JavaScript build, plus a benchmark |
 | [`scripts/`](scripts) | Shell | Core purity check, WebAssembly packaging |
-| [`doc/`](doc) | | [Architecture](doc/architecture.md), [roadmap](doc/plan/README.md), and the [original protocol text](doc/protocol/README.md) (historical) |
+| [`doc/`](doc) | | [Architecture](doc/architecture.md), [feeds](doc/feeds.md), [roadmap](doc/plan/README.md), and the [original protocol text](doc/protocol/README.md) (historical) |
 | [`schema/`](schema) | JSON-LD | [`legacy-2017/`](schema/legacy-2017): the 2017 `TrustClaim` context (historical) |
 
 New projects go in this repo:

@@ -26,6 +26,10 @@ pub enum Error {
     #[error("invalid credential: {0}")]
     InvalidCredential(String),
 
+    /// A feed's index or atoms file is malformed.
+    #[error("invalid feed: {0}")]
+    InvalidFeed(String),
+
     /// A credential is well formed but its proof does not verify.
     #[error("verification failed: {0}")]
     Verification(String),

@@ -17,8 +17,11 @@ const view: TG.LensEntry[] = tg.lens([credential, { source: "a", target: "b", va
 const best: number = view[0]?.score ?? 0;
 const rollups: TG.TrustAtom[] = tg.rollup([credential], me.did, null, new Date().toISOString());
 const id: string = tg.atomId(rollups[0]!);
+const feed: TG.Feed = tg.buildFeed([credential], me.secretKeyMultibase, new Date().toISOString());
+const fed: TG.FeedVerification = tg.verifyFeed(feed.index, feed.atoms);
+const owner: string | undefined = fed.owner;
 
 // @ts-expect-error depth must be a number
 tg.lens([], me.did, { depth: "3" });
 
-export { atom, best, id, fromSeed };
+export { atom, best, id, fromSeed, owner };

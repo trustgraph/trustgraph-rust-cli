@@ -89,6 +89,19 @@ pub fn verify(credential: Value) -> Result<Value> {
     json(&api::verify(&credential))
 }
 
+/// Builds a feed, `{index, atoms}`, from credentials signed by the key's
+/// owner, stamped `updated` (RFC 3339).
+#[napi]
+pub fn build_feed(credentials: Vec<Value>, secret_key_multibase: String, updated: String) -> Result<Value> {
+    json(&core(api::build_feed(&credentials, &secret_key_multibase, &updated))?)
+}
+
+/// Verifies a feed: `{valid, owner?, updated?, ids?, atoms?, error?}`.
+#[napi]
+pub fn verify_feed(index: Value, atoms: String) -> Result<Value> {
+    json(&api::verify_feed(&index, &atoms))
+}
+
 /// The Agent Lens for `root` over `items`, best first.
 #[napi]
 pub fn lens(items: Vec<Value>, root: String, options: Option<Value>) -> Result<Value> {

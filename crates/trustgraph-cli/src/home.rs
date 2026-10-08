@@ -51,6 +51,10 @@ impl Home {
         self.dir.join("atoms.ndjson")
     }
 
+    pub fn following_path(&self) -> PathBuf {
+        self.dir.join("following.json")
+    }
+
     pub fn open_store(&self) -> Result<Store> {
         Store::open(self.store_path())
     }

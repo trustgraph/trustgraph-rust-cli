@@ -2,6 +2,7 @@
 
 mod cli;
 mod commands;
+mod feeds;
 mod home;
 mod io;
 mod store;

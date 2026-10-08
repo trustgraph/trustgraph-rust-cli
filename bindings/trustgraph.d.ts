@@ -80,6 +80,39 @@ export interface LensEntry {
   raters: number;
 }
 
+/** A feed's signed index (`index.json`). See doc/feeds.md. */
+export interface FeedIndex {
+  "@context": string[];
+  type: "TrustFeedIndex";
+  /** The owner's DID: it signs the index and issued every atom. */
+  owner: string;
+  /** RFC 3339. */
+  updated: string;
+  atoms: {
+    count: number;
+    /** SHA2-256 multihash (`Qm…`) of the exact bytes of `atoms.ndjson`. */
+    digest: string;
+  };
+  proof?: Credential["proof"];
+}
+
+/** A feed's two files: `index.json` (parsed) and `atoms.ndjson` (text). */
+export interface Feed {
+  index: FeedIndex;
+  atoms: string;
+}
+
+export interface FeedVerification {
+  valid: boolean;
+  owner?: string;
+  updated?: string;
+  /** Content IDs, in file order. */
+  ids?: string[];
+  /** The verified atoms, in file order. */
+  atoms?: TrustAtom[];
+  error?: string;
+}
+
 /** Atoms and/or signed credentials. */
 export type Item = TrustAtomInput | Credential;
 
@@ -101,3 +134,7 @@ export function verify(credential: Credential): Verification;
 export function lens(items: Item[], root: string, options?: LensOptions | null): LensEntry[];
 /** Rollup atoms (unsigned) for `root`'s lens, timestamped `at` (RFC 3339). */
 export function rollup(items: Item[], root: string, options: LensOptions | null | undefined, at: string): TrustAtom[];
+/** Builds a feed from credentials all signed by the key's owner. `updated` is RFC 3339. */
+export function buildFeed(credentials: Credential[], secretKeyMultibase: string, updated: string): Feed;
+/** Verifies a feed: the index's signature, the digest of `atoms` (the exact text of `atoms.ndjson`), and every atom. */
+export function verifyFeed(index: FeedIndex, atoms: string): FeedVerification;

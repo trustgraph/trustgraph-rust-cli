@@ -121,6 +121,31 @@ pub fn verify(credential: JsValue) -> JsResult<JsValue> {
     to_js(&api::verify(&from_js::<Json>(credential, "credential")?))
 }
 
+/// Builds a feed, `{index, atoms}`: the contents of `index.json` and
+/// `atoms.ndjson`. `credentials` must all be signed by the key's owner;
+/// `updated` is an RFC 3339 time.
+///
+/// # Errors
+///
+/// Throws if the key or time is invalid, or a credential does not verify or
+/// was issued by someone else.
+#[wasm_bindgen(js_name = buildFeed)]
+pub fn build_feed(credentials: JsValue, secret_key_multibase: &str, updated: &str) -> JsResult<JsValue> {
+    let credentials: Vec<Json> = from_js(credentials, "credentials")?;
+    to_js(&core(api::build_feed(&credentials, secret_key_multibase, updated))?)
+}
+
+/// Verifies a feed: `index` is the parsed `index.json`, `atoms` the exact
+/// text of `atoms.ndjson`. Returns `{valid, owner?, updated?, ids?, atoms?, error?}`.
+///
+/// # Errors
+///
+/// Throws only if `index` cannot be read as JSON.
+#[wasm_bindgen(js_name = verifyFeed)]
+pub fn verify_feed(index: JsValue, atoms: &str) -> JsResult<JsValue> {
+    to_js(&api::verify_feed(&from_js::<Json>(index, "index")?, atoms))
+}
+
 /// The Agent Lens: everything `root` can see in `items` (atoms and/or
 /// signed credentials), best first. `options` is optional:
 /// `{depth?, decay?, topic?, signedOnly?, limit?}`.

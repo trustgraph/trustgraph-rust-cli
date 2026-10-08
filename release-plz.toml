@@ -1,0 +1,34 @@
+# release-plz: opens a release PR (version bump + CHANGELOG.md) on every push
+# to master, and publishes to crates.io when that PR is merged.
+# See doc/releasing.md and https://release-plz.dev/docs/config.
+#
+# Every crate shares one version (workspace.package.version), and a release
+# is one tag, `vX.Y.Z`. Pushing that tag starts the binary build (dist,
+# .github/workflows/release.yml) and the npm packages (.github/workflows/npm.yml).
+
+[workspace]
+# One CHANGELOG.md at the repo root, written for trustgraph-cli (below).
+changelog_update = false
+git_tag_enable = false
+# dist creates the GitHub Release (with binaries and installers) from the tag.
+git_release_enable = false
+# Merge the release PR yourself; never release on an unrelated push.
+release_always = false
+pr_labels = ["release"]
+
+[[package]]
+name = "trustgraph-cli"
+# The one CHANGELOG and the one tag for the whole release live here.
+changelog_path = "./CHANGELOG.md"
+changelog_update = true
+changelog_include = ["trustgraph-core"]
+git_tag_enable = true
+git_tag_name = "v{{ version }}"
+version_group = "trustgraph"
+
+[[package]]
+name = "trustgraph-core"
+version_group = "trustgraph"
+
+[changelog]
+protect_breaking_commits = true

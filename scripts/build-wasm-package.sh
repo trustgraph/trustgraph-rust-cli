@@ -19,7 +19,7 @@ wasm-bindgen --target web --out-dir "$out/web" "$wasm"
 wasm-bindgen --target nodejs --out-dir "$out/node" "$wasm"
 # The package is "type": "module"; the Node build is CommonJS.
 mv "$out/node/trustgraph_wasm.js" "$out/node/trustgraph_wasm.cjs"
-cp crates/trustgraph-wasm/package.json bindings/trustgraph.d.ts "$out/"
+cp crates/trustgraph-wasm/package.json crates/trustgraph-wasm/README.md LICENSE bindings/trustgraph.d.ts "$out/"
 
 bytes=$(wc -c <"$out/web/trustgraph_wasm_bg.wasm")
 gzipped=$(gzip -9 -c "$out/web/trustgraph_wasm_bg.wasm" | wc -c)

@@ -9,4 +9,4 @@ The [Trust Graph](https://trustgraph.net) protocol in pure Rust, with **no I/O**
 - `Record` / `Query`: verified atoms and filters
 - `api`: the JSON-shaped API shared by the CLI, WebAssembly and Node wrappers
 
-See the [architecture](../../doc/architecture.md).
+See the [architecture](https://github.com/trustgraph/trustgraph-rust-cli/blob/master/doc/architecture.md).

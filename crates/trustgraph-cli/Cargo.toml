@@ -1,6 +1,6 @@
 [package]
 name = "trustgraph-cli"
-description = "`trust`: the Trust Graph command line interface"
+description = "Trust Graph command line interface (`trust`): sign trust atoms and see the world through your agent lens"
 readme = "../../README.md"
 keywords = ["trust", "reputation", "did", "cli", "trustgraph"]
 categories = ["command-line-utilities", "cryptography"]
@@ -11,7 +11,6 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-publish = false
 
 [[bin]]
 name = "trust"

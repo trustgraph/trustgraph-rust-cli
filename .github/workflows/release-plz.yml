@@ -1,0 +1,93 @@
+# Versioning, CHANGELOG and crates.io. See doc/releasing.md.
+#
+# On every push to master, release-plz opens (or updates) a release PR that
+# bumps the workspace version and CHANGELOG.md. Merging that PR publishes
+# trustgraph-core and trustgraph-cli to crates.io and pushes the `vX.Y.Z` tag,
+# which starts release.yml (binaries, installers, Homebrew) and npm.yml.
+#
+# Needs the RELEASE_PLZ_TOKEN secret (a token whose pushes trigger workflows;
+# the default GITHUB_TOKEN's do not). Until it exists, both jobs skip.
+name: Release-plz
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  release-plz-release:
+    name: Release-plz release
+    if: github.repository_owner == 'trustgraph'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+      id-token: write  # crates.io trusted publishing
+    steps:
+      - name: Check configuration
+        id: config
+        env:
+          RELEASE_PLZ_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -n "$RELEASE_PLZ_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::RELEASE_PLZ_TOKEN is not set, skipping (see doc/releasing.md)"
+          fi
+          # Optional. Without it, release-plz uses crates.io trusted publishing
+          # (an empty CARGO_REGISTRY_TOKEN would be an error, so set it only
+          # when the secret exists).
+          if [ -n "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "CARGO_REGISTRY_TOKEN=$CARGO_REGISTRY_TOKEN" >> "$GITHUB_ENV"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.config.outputs.enabled
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.config.outputs.enabled
+      - uses: release-plz/action@v0.5
+        if: steps.config.outputs.enabled
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+
+  release-plz-pr:
+    name: Release-plz PR
+    if: github.repository_owner == 'trustgraph'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-plz-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Check configuration
+        id: config
+        env:
+          RELEASE_PLZ_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+        run: |
+          if [ -n "$RELEASE_PLZ_TOKEN" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::RELEASE_PLZ_TOKEN is not set, skipping (see doc/releasing.md)"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.config.outputs.enabled
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.config.outputs.enabled
+      - uses: release-plz/action@v0.5
+        if: steps.config.outputs.enabled
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}

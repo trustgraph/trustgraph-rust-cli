@@ -1,0 +1,245 @@
+# npm packages. See doc/releasing.md.
+#
+#   @trustgraph/trustgraph       native addon (napi-rs): one small package per
+#                                platform plus a root package that picks the
+#                                right one through optionalDependencies
+#   @trustgraph/trustgraph-wasm  WebAssembly (scripts/build-wasm-package.sh)
+#
+# A `vX.Y.Z` tag builds, tests and publishes them with provenance. Pull
+# requests that touch this pipeline, and manual runs, do everything except the
+# upload (`pnpm publish --dry-run`), so they need no secrets.
+name: npm
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+*"]
+  pull_request:
+    paths:
+      - .github/workflows/npm.yml
+      - scripts/npm-publish.sh
+      - scripts/build-wasm-package.sh
+      - crates/trustgraph-node/package.json
+      - crates/trustgraph-wasm/package.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # napi-rs builds macOS binaries for this minimum version.
+  MACOSX_DEPLOYMENT_TARGET: "11.0"
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      dry-run: ${{ steps.version.outputs.dry-run }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Version from Cargo.toml, checked against the tag
+        id: version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            [ "$GITHUB_REF_NAME" = "v$version" ] || {
+              echo "::error::tag $GITHUB_REF_NAME does not match Cargo.toml version $version"
+              exit 1
+            }
+            echo "dry-run=" >> "$GITHUB_OUTPUT"
+          else
+            echo "dry-run=--dry-run" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "npm version $version ${GITHUB_REF_TYPE}"
+
+  native:
+    name: Native ${{ matrix.target }}
+    runs-on: ${{ matrix.host }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { host: macos-latest, target: aarch64-apple-darwin, test: true }
+          - { host: macos-latest, target: x86_64-apple-darwin }
+          - { host: windows-latest, target: x86_64-pc-windows-msvc, test: true }
+          - { host: windows-latest, target: aarch64-pc-windows-msvc }
+          # napi-cross: an old glibc, so the binary runs on older distros.
+          - { host: ubuntu-latest, target: x86_64-unknown-linux-gnu, flags: --use-napi-cross }
+          - { host: ubuntu-latest, target: aarch64-unknown-linux-gnu, flags: --use-napi-cross }
+          # -x: cargo-zigbuild.
+          - { host: ubuntu-latest, target: x86_64-unknown-linux-musl, flags: -x }
+          - { host: ubuntu-latest, target: aarch64-unknown-linux-musl, flags: -x }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - uses: mlugg/setup-zig@v2
+        if: contains(matrix.target, 'musl')
+        with:
+          version: 0.15.2
+      - uses: taiki-e/install-action@v2
+        if: contains(matrix.target, 'musl')
+        with:
+          tool: cargo-zigbuild
+      - uses: pnpm/action-setup@v6  # version from packageManager in package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc  # latest LTS
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build
+        working-directory: crates/trustgraph-node
+        shell: bash
+        run: pnpm exec napi build --platform --release --target ${{ matrix.target }} ${{ matrix.flags }}
+      - name: Smoke test
+        if: matrix.test
+        run: node tests/js/smoke.mjs crates/trustgraph-node/index.js
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bindings-${{ matrix.target }}
+          path: crates/trustgraph-node/*.node
+          if-no-files-found: error
+      # The loader is the same for every target; keep one copy.
+      - uses: actions/upload-artifact@v7
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        with:
+          name: bindings-loader
+          path: crates/trustgraph-node/index.js
+          if-no-files-found: error
+
+  native-test-linux:
+    name: Test ${{ matrix.target }} (${{ matrix.image }})
+    needs: native
+    runs-on: ${{ startsWith(matrix.target, 'aarch64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, image: "node:lts-slim" }
+          - { target: aarch64-unknown-linux-gnu, image: "node:lts-slim" }
+          - { target: x86_64-unknown-linux-musl, image: "node:lts-alpine" }
+          - { target: aarch64-unknown-linux-musl, image: "node:lts-alpine" }
+          # Oldest supported Node.
+          - { target: x86_64-unknown-linux-gnu, image: "node:22-slim" }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: "bindings-{${{ matrix.target }},loader}"
+          path: crates/trustgraph-node
+          merge-multiple: true
+      - name: Smoke test in ${{ matrix.image }}
+        run: |
+          docker run --rm -v "$PWD:/w" -w /w "${{ matrix.image }}" \
+            node tests/js/smoke.mjs crates/trustgraph-node/index.js
+
+  native-publish:
+    name: Publish @trustgraph/trustgraph
+    needs: [version, native, native-test-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # npm provenance and trusted publishing
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      DRY_RUN: ${{ needs.version.outputs.dry-run }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: bindings-*
+          path: crates/trustgraph-node/artifacts
+          merge-multiple: true
+      - name: Assemble the root and per-platform packages
+        working-directory: crates/trustgraph-node
+        run: |
+          pnpm pkg set version="$VERSION"
+          mv artifacts/index.js .
+          cp ../../bindings/trustgraph.d.ts ../../LICENSE .
+          pnpm exec napi create-npm-dirs
+          pnpm exec napi artifacts --output-dir artifacts
+          # The root package depends on every platform package; npm installs
+          # only the one whose os/cpu/libc match.
+          node -e '
+            const fs = require("fs");
+            const root = JSON.parse(fs.readFileSync("package.json"));
+            root.optionalDependencies = {};
+            for (const dir of fs.readdirSync("npm").sort()) {
+              const pkg = JSON.parse(fs.readFileSync(`npm/${dir}/package.json`));
+              const node = pkg.files.find((f) => f.endsWith(".node"));
+              if (!fs.existsSync(`npm/${dir}/${node}`)) throw new Error(`missing npm/${dir}/${node}`);
+              fs.copyFileSync("LICENSE", `npm/${dir}/LICENSE`);
+              root.optionalDependencies[pkg.name] = root.version;
+            }
+            fs.writeFileSync("package.json", JSON.stringify(root, null, 2) + "\n");
+          '
+          ls -lR npm
+          cat package.json
+      - name: npm token (optional; trusted publishing needs none)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
+          fi
+      - name: Publish per-platform packages, then the root package
+        working-directory: crates/trustgraph-node
+        run: |
+          for dir in npm/*/; do ../../scripts/npm-publish.sh "$dir" $DRY_RUN; done
+          ../../scripts/npm-publish.sh . $DRY_RUN
+
+  wasm:
+    name: Publish @trustgraph/trustgraph-wasm
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # npm provenance and trusted publishing
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      DRY_RUN: ${{ needs.version.outputs.dry-run }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: wasm-bindgen version from Cargo.lock
+        id: wasm-bindgen
+        run: echo "version=$(grep -A1 '^name = "wasm-bindgen"$' Cargo.lock | sed -n 's/^version = "\(.*\)"/\1/p')" >> "$GITHUB_OUTPUT"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: scripts/build-wasm-package.sh
+      - run: node tests/js/smoke.mjs target/npm/trustgraph-wasm/node/trustgraph_wasm.cjs
+      - run: node tests/js/smoke.mjs target/npm/trustgraph-wasm/web/trustgraph_wasm.js
+      - name: Set the version
+        working-directory: target/npm/trustgraph-wasm
+        run: pnpm pkg set version="$VERSION"
+      - name: npm token (optional; trusted publishing needs none)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
+          fi
+      - run: scripts/npm-publish.sh target/npm/trustgraph-wasm $DRY_RUN

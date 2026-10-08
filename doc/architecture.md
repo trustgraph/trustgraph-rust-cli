@@ -168,15 +168,17 @@ The native package uses napi-rs's per-platform layout (one small npm package
 per OS/CPU, installed as optional dependencies, chosen by the generated
 `index.js`), the same pattern as `@resvg/resvg-js`. Targets are listed in
 [`crates/trustgraph-node/package.json`](../crates/trustgraph-node/package.json).
-CI builds and tests it on Linux, macOS and Windows.
+CI builds and tests it on Linux, macOS and Windows. Releases build all eight
+targets and publish both npm packages from `.github/workflows/npm.yml`; see
+[releasing](releasing.md).
 
 ## Open items
 
 1. **Publishing.** Convex's `externalPackages` installs from npm at deploy
    time, so `@trustgraph/trustgraph` must be published. Decide whether the
    `@trustgraph` scope is public; if it must be private, first test that Convex
-   can install from a private registry. Then add the napi-rs cross-compile and
-   publish matrix to the release workflow.
+   can install from a private registry. The napi-rs cross-compile and publish
+   matrix is in place ([releasing](releasing.md)); it publishes publicly.
 2. **A real Convex spike.** The numbers above come from Node. Before relying on
    it, deploy a small query that imports `@trustgraph/trustgraph-wasm` and
    runs `lens`, and confirm the bundle size and cold-start time in Convex

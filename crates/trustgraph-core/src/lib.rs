@@ -8,6 +8,8 @@
 //! - [`Keypair`] / [`Did`]: Ed25519 identities as `did:key` DIDs.
 //! - [`credential`]: signed atoms as W3C Verifiable Credentials 2.0, using
 //!   the `eddsa-jcs-2022` cryptosuite.
+//! - [`did`]: DID documents, `did:web` and `did:webvh` (verifiable history,
+//!   key rotation), and verifying credentials against a resolved document.
 //! - [`TrustGraph`]: the **Agent Lens**, everything one agent can see
 //!   through the **Trust Cascade** of the agents they trust.
 //! - [`Record`] / [`Query`]: verified atoms and filters over them.
@@ -37,6 +39,7 @@ pub mod api;
 pub mod atom;
 pub mod canonical;
 pub mod credential;
+pub mod did;
 pub mod error;
 pub mod graph;
 pub mod id;

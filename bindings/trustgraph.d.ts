@@ -80,6 +80,52 @@ export interface LensEntry {
   raters: number;
 }
 
+/** A DID document (DID 1.1 / Controlled Identifiers 1.0). */
+export interface DidDocument {
+  "@context"?: string | (string | Record<string, unknown>)[];
+  id: string;
+  alsoKnownAs?: string[];
+  verificationMethod?: { id: string; type: string; controller?: string; publicKeyMultibase?: string }[];
+  authentication?: (string | Record<string, unknown>)[];
+  assertionMethod?: (string | Record<string, unknown>)[];
+  service?: Record<string, unknown>[];
+  [property: string]: unknown;
+}
+
+/** A did:webvh log, as fetched: the text of `did.jsonl` (and `did-witness.json`). */
+export interface DidLog {
+  didLog: string;
+  didWitness?: string;
+}
+
+export interface WebvhOptions {
+  /** The text of `did-witness.json`, for DIDs that use witnesses. */
+  didWitness?: string;
+  versionId?: string;
+  versionNumber?: number;
+  /** RFC 3339: the version in force at that time. */
+  versionTime?: string;
+  /** RFC 3339: the current time, to reject entries dated in the future. */
+  now?: string;
+}
+
+export interface DidResolution {
+  didDocument: DidDocument;
+  didDocumentMetadata: {
+    versionId: string;
+    versionNumber: number;
+    versionTime: string;
+    created: string;
+    updated: string;
+    scid: string;
+    portable: boolean;
+    deactivated: boolean;
+    ttl: string;
+    witness?: { threshold: string; witnesses: { id: string }[] };
+    watchers?: string[];
+  };
+}
+
 /** Atoms and/or signed credentials. */
 export type Item = TrustAtomInput | Credential;
 
@@ -101,3 +147,11 @@ export function verify(credential: Credential): Verification;
 export function lens(items: Item[], root: string, options?: LensOptions | null): LensEntry[];
 /** Rollup atoms (unsigned) for `root`'s lens, timestamped `at` (RFC 3339). */
 export function rollup(items: Item[], root: string, options: LensOptions | null | undefined, at: string): TrustAtom[];
+/** Where a did:web document (`did.json`) or did:webvh log (`did.jsonl`) is published. Fetch it, then use `verifyWith`. */
+export function didDocumentUrl(did: string): string;
+/** The DID document of a `did:key`. */
+export function resolveDidKey(did: string): DidDocument;
+/** Verifies a did:webvh log and resolves the DID (latest version unless `options` picks one). */
+export function resolveDidWebvh(did: string, didLog: string, options?: WebvhOptions | null): DidResolution;
+/** Verifies a credential against its issuer's resolved DID: a DID document, or a did:webvh log (checked as of the proof's `created`). */
+export function verifyWith(credential: Credential, resolved: DidDocument | DidLog): Verification;

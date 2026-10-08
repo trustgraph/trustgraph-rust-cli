@@ -33,6 +33,7 @@ napi = { version = "3", default-features = false, features = ["napi6", "serde-js
 napi-derive = "3"
 napi-build = "2"
 thiserror = "2.0"
+ureq = "3.4"
 
 assert_cmd = "2.2"
 hex = "0.4"

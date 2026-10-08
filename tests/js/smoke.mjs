@@ -59,4 +59,24 @@ assert.equal(tg.canonicalAtom({ target: "b", source: "a" }), '{"source":"a","tar
 assert.equal(tg.toCredential({ source: "a", target: "b" }).type[1], "TrustAtomCredential");
 assert.throws(() => tg.parseAtom({ source: "a" }), /target/);
 
+// DIDs: hosts fetch did:web / did:webvh documents themselves and pass them in.
+assert.equal(tg.didDocumentUrl("did:web:example.com:alice"), "https://example.com/alice/did.json");
+assert.equal(
+  tg.didDocumentUrl("did:webvh:QmPEQVM1JPTyrvEgBcDXwjK4TeyLGSX1PxjgyeAisdWM1p:example.com"),
+  "https://example.com/.well-known/did.jsonl",
+);
+const aliceDoc = tg.resolveDidKey(alice.did);
+assert.equal(aliceDoc.id, alice.did);
+assert.equal(tg.verifyWith(items[0], aliceDoc).valid, true);
+assert.equal(tg.verifyWith(items[0], tg.resolveDidKey(bob.did)).valid, false);
+// did:webvh: a log from the DIF test suite (basic-create).
+const webvhLog = readFileSync(new URL("../../crates/trustgraph-core/tests/vectors/didwebvh/basic-create/did.jsonl", import.meta.url), "utf8");
+const webvhDid = "did:webvh:Qmdxt11AjZewCNXX69bpEDobgjySeZ7eFwjf4tgpF6p2Dg:example.com";
+const resolution = tg.resolveDidWebvh(webvhDid, webvhLog);
+assert.equal(resolution.didDocument.id, webvhDid);
+assert.equal(resolution.didDocumentMetadata.versionNumber, 1);
+assert.deepEqual(tg.resolveDidWebvh(webvhDid, webvhLog, null), resolution);
+assert.throws(() => tg.resolveDidWebvh(webvhDid, webvhLog.replace("Multikey", "MultiKey")), /entry hash/);
+assert.match(tg.verifyWith(items[0], { didLog: webvhLog }).error, /webvh/);
+
 console.log(`smoke test passed: ${process.argv[2]}`);

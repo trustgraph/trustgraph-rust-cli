@@ -2,8 +2,10 @@
 
 mod cli;
 mod commands;
+mod did;
 mod home;
 mod io;
+mod resolver;
 mod store;
 
 use std::process::ExitCode;

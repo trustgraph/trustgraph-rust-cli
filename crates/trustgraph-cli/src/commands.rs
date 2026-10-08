@@ -10,8 +10,10 @@ use trustgraph_core::api;
 use trustgraph_core::{Keypair, LensOptions, Query, Record, TrustAtom, TrustGraph, credential};
 
 use crate::cli::{AtomArgs, Cli, Command, ConvertArgs, Format, InputArgs, KeyCommand, LensArgs, QueryArgs, SignArgs};
+use crate::did::Signer;
 use crate::home::Home;
 use crate::io::{Output, read_json};
+use crate::resolver::Resolver;
 
 /// Whether the command succeeded. `Failed` means the command ran, but its
 /// answer was "no" (e.g. a signature did not verify).
@@ -27,12 +29,13 @@ pub fn run<W: Write>(cli: Cli, out: &mut Output<W>) -> Result<Outcome> {
         Command::Key(cmd) => key(&home, cmd, out),
         Command::Atom(args) => atom(&home, args, out),
         Command::Sign(args) => sign(&home, &args, out),
-        Command::Verify(args) => verify(&args, out),
+        Command::Verify(args) => verify(&Resolver::new(&home, cli.offline)?, &args, out),
         Command::Id(args) => id(&args, out),
         Command::Convert(args) => convert(&args, out),
-        Command::Add(args) => add(&home, &args, out),
+        Command::Add(args) => add(&home, &Resolver::new(&home, cli.offline)?, &args, out),
         Command::Query(args) => query(&home, args, out),
         Command::Lens(args) => lens(&home, args, out),
+        Command::Did(cmd) => crate::did::run(&home, cli.offline, cmd, out),
         Command::Info => {
             out.json(&json!({
                 "version": env!("CARGO_PKG_VERSION"),
@@ -51,7 +54,7 @@ pub fn run<W: Write>(cli: Cli, out: &mut Output<W>) -> Result<Outcome> {
     }
 }
 
-fn now() -> Timestamp {
+pub fn now() -> Timestamp {
     Timestamp::now().round(Unit::Second).unwrap_or_else(|_| Timestamp::now())
 }
 
@@ -92,10 +95,10 @@ fn key<W: Write>(home: &Home, cmd: KeyCommand, out: &mut Output<W>) -> Result<Ou
 }
 
 fn atom<W: Write>(home: &Home, args: AtomArgs, out: &mut Output<W>) -> Result<Outcome> {
-    let keypair = if args.sign || args.source.is_none() { Some(home.load_key(&args.key.key)?) } else { None };
-    let source = match (&args.source, &keypair) {
+    let signer = if args.sign || args.source.is_none() { Some(Signer::load(home, &args.key.key)?) } else { None };
+    let source = match (&args.source, &signer) {
         (Some(source), _) => source.clone(),
-        (None, Some(keypair)) => keypair.did().to_string(),
+        (None, Some(signer)) => signer.did(),
         (None, None) => unreachable!("a key is loaded when there is no --source"),
     };
     let mut atom = TrustAtom::new(source, args.target);
@@ -107,8 +110,8 @@ fn atom<W: Write>(home: &Home, args: AtomArgs, out: &mut Output<W>) -> Result<Ou
     }
     atom.validate()?;
 
-    match keypair.filter(|_| args.sign) {
-        Some(keypair) => out.json(&credential::sign_atom(&atom, &keypair, now())?)?,
+    match signer.filter(|_| args.sign) {
+        Some(signer) => out.json(&signer.sign(&atom, now())?)?,
         None => out.json(&atom)?,
     }
     Ok(Outcome::Success)
@@ -126,23 +129,23 @@ fn read_items(input: &InputArgs) -> Result<Vec<(usize, Json)>> {
 }
 
 fn sign<W: Write>(home: &Home, args: &SignArgs, out: &mut Output<W>) -> Result<Outcome> {
-    let keypair = home.load_key(&args.key.key)?;
+    let signer = Signer::load(home, &args.key.key)?;
     let created = args.created.unwrap_or_else(now);
     for (n, json) in read_items(&args.input)? {
         if json.get("proof").is_some() {
             bail!("item {n}: already signed");
         }
         let atom: TrustAtom = serde_json::from_value(json).with_context(|| format!("item {n}: not a Trust Atom"))?;
-        let signed = credential::sign_atom(&atom, &keypair, created).with_context(|| format!("item {n}"))?;
-        out.json(&signed)?;
+        let credential = signer.sign(&atom, created).with_context(|| format!("item {n}"))?;
+        out.json(&credential)?;
     }
     Ok(Outcome::Success)
 }
 
-fn verify<W: Write>(args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
+fn verify<W: Write>(resolver: &Resolver, args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
     let mut outcome = Outcome::Success;
     for (_, json) in read_items(args)? {
-        let result = api::verify(&json);
+        let result = resolver.verify(&json);
         if !result.valid {
             outcome = Outcome::Failed;
         }
@@ -170,15 +173,31 @@ fn convert<W: Write>(args: &ConvertArgs, out: &mut Output<W>) -> Result<Outcome>
     Ok(Outcome::Success)
 }
 
-fn add<W: Write>(home: &Home, args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
+fn add<W: Write>(home: &Home, resolver: &Resolver, args: &InputArgs, out: &mut Output<W>) -> Result<Outcome> {
     let mut store = home.open_store()?;
     for (n, json) in read_items(args)? {
-        let record = Record::from_json(json).with_context(|| format!("item {n}"))?;
+        let record = record(resolver, json).with_context(|| format!("item {n}"))?;
         let (id, signed) = (record.id, record.is_signed());
         let added = store.add(record)?;
         out.json(&json!({ "id": id, "added": added, "signed": signed }))?;
     }
     Ok(Outcome::Success)
+}
+
+/// A record for the store. Credentials from did:web and did:webvh issuers
+/// are verified by resolving the issuer.
+fn record(resolver: &Resolver, json: Json) -> Result<Record> {
+    let issuer = json.get("proof").and_then(|_| credential::from_credential(&json).ok()).map(|atom| atom.source);
+    match issuer {
+        Some(issuer) if !issuer.starts_with("did:key:") => {
+            let result = resolver.verify(&json);
+            match (result.valid, result.atom, result.error) {
+                (true, Some(atom), _) => Ok(Record { id: atom.id()?, atom, credential: Some(json) }),
+                (_, _, error) => bail!("{}", error.unwrap_or_default()),
+            }
+        }
+        _ => Ok(Record::from_json(json)?),
+    }
 }
 
 fn query<W: Write>(home: &Home, args: QueryArgs, out: &mut Output<W>) -> Result<Outcome> {
@@ -203,7 +222,7 @@ fn query<W: Write>(home: &Home, args: QueryArgs, out: &mut Output<W>) -> Result<
 fn lens<W: Write>(home: &Home, args: LensArgs, out: &mut Output<W>) -> Result<Outcome> {
     let agent = match args.agent {
         Some(agent) => agent,
-        None => home.load_key(&args.key.key)?.did().to_string(),
+        None => Signer::load(home, &args.key.key)?.did(),
     };
     let store = home.open_store()?;
     let q = Query { signed_only: args.signed_only, ..Query::default() };

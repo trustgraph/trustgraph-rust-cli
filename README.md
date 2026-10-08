@@ -17,7 +17,9 @@ Everything rests on one pure Rust core, shipped as a command line tool
 
 - **Trust Atoms.** Every rating, vouch or review is one small statement:
   *source* trusts *target*, about *content*, this much (`-1` to `1`).
-- **Self-sovereign.** You sign with your own key (a `did:key` identity). Signed
+- **Self-sovereign.** You sign with your own key: a `did:key`, or a
+  [`did:webvh`](doc/identity.md) on your own domain if you want to rotate keys
+  or sign as an organization. Signed
   atoms are standard [W3C Verifiable Credentials 2.0](https://www.w3.org/TR/vc-data-model-2.0/)
   using the [`eddsa-jcs-2022`](https://www.w3.org/TR/vc-di-eddsa/) cryptosuite,
   so any VC library can verify them.
@@ -26,7 +28,8 @@ Everything rests on one pure Rust core, shipped as a command line tool
   outward with decreasing weight (the **Trust Cascade**).
 - **Unix-friendly.** JSON in, JSON out, one item per line. Commands pipe into
   each other and into `jq`.
-- **Offline.** Nothing needs a server or a network connection.
+- **Offline.** Nothing needs a server or a network connection (only verifying
+  `did:web`/`did:webvh` signers fetches their DID once, and caches it).
 - **Runs everywhere.** The same core runs on the command line, in browsers,
   Cloudflare Workers, Deno, Node, and inside reactive database queries such as
   Convex's. See [architecture](doc/architecture.md).
@@ -89,12 +92,15 @@ trust lens --topic sushi --rollup | trust sign | trust add
 | `trust key new\|list\|show\|export\|import` | Manage identities (Ed25519, `did:key`) |
 | `trust atom -t TARGET [-v VALUE] [-c CONTENT] [--sign]` | Create a Trust Atom. `VALUE` is `-1..=1` or `RATING/BEST` such as `4/5` |
 | `trust sign [FILE]` | Sign atoms as Verifiable Credentials |
-| `trust verify [FILE]` | Verify credentials. Exits 1 if any are invalid |
+| `trust verify [FILE]` | Verify credentials. Exits 1 if any are invalid. `did:web`/`did:webvh` issuers are fetched over HTTPS and cached (`--offline` to never fetch) |
 | `trust id [FILE]` | Print content IDs (`Qm…` SHA2-256 multihashes) |
 | `trust convert --to atom\|credential\|canonical [FILE]` | Convert between formats |
 | `trust add [FILE]` | Add atoms or signed credentials to the local store |
 | `trust query [--source] [--target] [--topic] [--signed-only]` | Search the local store |
 | `trust lens [AGENT] [--topic] [--depth] [--decay] [--rollup]` | View the graph through an agent's lens |
+| `trust did resolve DID` | Resolve a `did:key`, `did:web` or `did:webvh` to its DID document |
+| `trust did webvh create --domain D [--path P]` / `rotate` | Sign as a `did:webvh` on your domain, and rotate its key ([identity](doc/identity.md)) |
+| `trust did web create --domain D` / `trust did show` | Sign as a `did:web`; show which DID a key signs as |
 | `trust info` | Show where keys and data live |
 | `trust completions SHELL` | Shell completions |
 
@@ -190,7 +196,7 @@ tg.lens([credential /* , …everyone else's atoms */], me.did, { topic: "sushi" 
 | [`bindings/`](bindings) | TypeScript | Types shared by both npm packages |
 | [`tests/js/`](tests/js) | JavaScript | One smoke test run against every JavaScript build, plus a benchmark |
 | [`scripts/`](scripts) | Shell | Core purity check, WebAssembly packaging |
-| [`doc/`](doc) | | [Architecture](doc/architecture.md), [roadmap](doc/plan/README.md), and the [original protocol text](doc/protocol/README.md) (historical) |
+| [`doc/`](doc) | | [Architecture](doc/architecture.md), [identity (DIDs)](doc/identity.md), [roadmap](doc/plan/README.md), and the [original protocol text](doc/protocol/README.md) (historical) |
 | [`schema/`](schema) | JSON-LD | [`legacy-2017/`](schema/legacy-2017): the 2017 `TrustClaim` context (historical) |
 
 New projects go in this repo:

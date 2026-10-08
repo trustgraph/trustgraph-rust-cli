@@ -105,6 +105,7 @@ Everything below this line is supporting detail.
 | Shared TypeScript types; one smoke test across all JS builds ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 | `lens` on 100k atoms (Node 24 LTS): 0.54 s WebAssembly, 0.43 s native ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
 | CI: purity check, WebAssembly size budget, native addon on 3 OSes, latest Node LTS plus Node 22 ([PR #15](https://github.com/trustgraph/trustgraph-rust-cli/pull/15)) | ✅ |
+| `did:webvh` (DIF v1.0): pure log verification (passes the DIF test suite), create, key rotation with pre-rotation, historical resolution; `did:web`; HTTPS resolver with cache and `--offline` ([identity](../identity.md)) | ✅ |
 | Old repos imported with full history: protocol README → `doc/protocol/`, 2017 JSON-LD → `schema/legacy-2017/` | ✅ |
 
 ## Design principles

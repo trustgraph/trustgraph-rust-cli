@@ -173,8 +173,8 @@ importers:
   crates/trustgraph-node:
     devDependencies:
       '@napi-rs/cli':
-        specifier: ^3.0.0
-        version: 3.10.7(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
+        specifier: ^3.10.9
+        version: 3.10.9(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
 
 packages:
 
@@ -330,8 +330,8 @@ packages:
       '@types/node':
         optional: true
 
-  '@napi-rs/cli@3.10.7':
-    resolution: {integrity: sha512-wTocvxyQeqqvKVOzocHMUs2X27Nc2EcRnpH0ojK8uSnzUAYSehfGSYgRheZNcU1ltY2yqJ/R18Zt2YbKXqYMmw==}
+  '@napi-rs/cli@3.10.9':
+    resolution: {integrity: sha512-RpzJrTDlSxUi2Deo+dh4bmDTKklAVe295aSQjZspwbZyUBG7twbXbiKskL2w/bL4kNg3DdkrwbI/iQwI9kgQaQ==}
     engines: {node: ^20.17.0 || ^22.13.0 || >= 23.5.0}
     hasBin: true
     peerDependencies:
@@ -1095,7 +1095,7 @@ snapshots:
 
   '@inquirer/type@4.2.0': {}
 
-  '@napi-rs/cli@3.10.7(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)':
+  '@napi-rs/cli@3.10.9(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)':
     dependencies:
       '@inquirer/prompts': 8.7.3
       '@napi-rs/cross-toolchain': 1.0.3
